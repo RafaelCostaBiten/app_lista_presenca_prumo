@@ -72,13 +72,43 @@
     
     #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
     
-    #feedback-card { padding: 20px; border-radius: var(--border-radius); text-align: center; color: white; transition: background 0.3s; min-height: 120px; display: flex; flex-direction: column; justify-content: center; background: var(--color-primary); }
-    #feedback-card.success { background: var(--color-success); }
-    #feedback-card.warning { background: var(--color-warning); }
-    #feedback-card.error { background: var(--color-danger); }
+    /* NOVO: Overlay de Feedback Centralizado */
+    #feedback-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      width: 85%;
+      max-width: 400px;
+      z-index: 9999;
+      padding: 30px 20px;
+      border-radius: 16px;
+      text-align: center;
+      color: white;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      /* Efeito de pulo suave (bounce) ao aparecer */
+      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
     
-    #feedback-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 8px; }
-    #feedback-subtitle { font-size: 1rem; opacity: 0.9; }
+    /* Classe para exibir o modal */
+    #feedback-overlay.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #feedback-overlay.success { background: rgba(22, 163, 74, 0.95); }
+    #feedback-overlay.warning { background: rgba(217, 119, 6, 0.95); }
+    #feedback-overlay.error { background: rgba(220, 38, 38, 0.95); }
+    
+    #feedback-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; }
+    #feedback-subtitle { font-size: 1.1rem; opacity: 0.9; }
   </style>
 </head>
 <body>
@@ -137,17 +167,18 @@
     <section id="scanner-view">
       <div id="reader-container"></div>
       
-      <div id="feedback-card">
-        <div id="feedback-title">Pronto para Ler</div>
-        <div id="feedback-subtitle">Aponte o crachá para a câmera</div>
-      </div>
-
       <button id="btn-exit-scanner" class="btn-outline">
         🔒 Sair do Modo Leitor (Requer PIN)
       </button>
     </section>
 
   </main>
+
+  <!-- OVERLAY DE FEEDBACK (Oculto por padrão, centralizado) -->
+  <div id="feedback-overlay">
+    <div id="feedback-title"></div>
+    <div id="feedback-subtitle"></div>
+  </div>
 
   <script>
     "use strict"; // Boas práticas: Impede declarações acidentais de variáveis globais
@@ -157,7 +188,7 @@
       // Configurações e Estado
       const CONFIG = {
         ADMIN_PIN: "1234", // PIN de Segurança da Interface
-        SCAN_COOLDOWN_MS: 2500 // Tempo de tela entre uma leitura e outra
+        SCAN_COOLDOWN_MS: 1500 // REDUZIDO: 1.5 segundos para a mensagem sumir rapidamente
       };
 
       const state = {
@@ -179,7 +210,7 @@
         btnClear: document.getElementById('btn-clear-data'),
         tbody: document.getElementById('attendance-tbody'),
         presCount: document.getElementById('present-count-label'),
-        feedbackCard: document.getElementById('feedback-card'),
+        feedbackOverlay: document.getElementById('feedback-overlay'),
         feedbackTitle: document.getElementById('feedback-title'),
         feedbackSubtitle: document.getElementById('feedback-subtitle')
       };
@@ -288,7 +319,6 @@
         });
       }
 
-      // NOVA CONFIGURAÇÃO DA CÂMERA (Sem limite e com auto-foco forçado)
       function startKioskMode() {
         const camId = dom.camSelect.value;
         if (!camId) {
@@ -302,8 +332,6 @@
         // --- NOVAS CONFIGURAÇÕES DE CÂMERA ---
         const scannerConfig = {
           fps: 15, // Aumentado para 15 quadros/segundo para capturar mais rápido
-          // A propriedade 'qrbox' foi removida. Agora ele lê a tela inteira!
-          
           // Força o navegador a pedir melhor resolução e foco contínuo ao celular
           videoConstraints: {
             width: { ideal: 1280 },
@@ -345,8 +373,6 @@
         const idLido = String(decodedText).trim();
         const employeeName = state.employees[idLido];
         
-        resetFeedbackUI();
-
         if (!employeeName) {
           // Crachá não pertence à empresa / não listado
           AudioSys.error();
@@ -357,7 +383,7 @@
           if (hasCheckedIn) {
             // Tentativa de marcação dupla
             AudioSys.warning();
-            setFeedbackUI("warning", employeeName, "Atenção: Presença já registrada hoje.");
+            setFeedbackUI("warning", employeeName, "Presença já registrada hoje!");
           } else {
             // Marcação com Sucesso
             AudioSys.success();
@@ -367,11 +393,11 @@
             state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
             localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
             
-            setFeedbackUI("success", employeeName, `Check-in confirmado às ${timeStr}`);
+            setFeedbackUI("success", employeeName, `Confirmado às ${timeStr}`);
           }
         }
 
-        // Libera o scanner após o tempo configurado
+        // Remove a mensagem popup e libera o scanner rapidamente
         setTimeout(() => {
           resetFeedbackUI();
           state.isProcessing = false;
@@ -379,24 +405,23 @@
       }
 
       function setFeedbackUI(type, title, subtitle) {
-        dom.feedbackCard.className = type;
-        dom.feedbackTitle.textContent = title; // Seguro contra XSS
+        // A classe 'show' faz o overlay aparecer via CSS transition
+        dom.feedbackOverlay.className = `${type} show`;
+        dom.feedbackTitle.textContent = title; 
         dom.feedbackSubtitle.textContent = subtitle;
       }
 
       function resetFeedbackUI() {
-        dom.feedbackCard.className = "";
-        dom.feedbackTitle.textContent = "Pronto para Ler";
-        dom.feedbackSubtitle.textContent = "Aponte o crachá para a câmera";
+        // Retirando a classe 'show', o overlay fica invisível e translúcido instantaneamente
+        dom.feedbackOverlay.className = "";
       }
 
       // --- UI Admin e Exportação ---
       function updateDashboard() {
-        // Atualiza contadores
         dom.empCount.innerHTML = `<strong>${Object.keys(state.employees).length}</strong> funcionários na memória local.`;
         dom.presCount.textContent = state.attendance.length;
 
-        // Reconstrói a tabela de forma segura (Prevenção XSS via DOM API)
+        // Prevenção XSS na inserção da tabela
         dom.tbody.innerHTML = "";
         state.attendance.forEach(row => {
           const tr = document.createElement("tr");
@@ -420,12 +445,10 @@
       function exportToExcel() {
         if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
         
-        // Criação estruturada do Excel usando SheetJS
         const worksheet = XLSX.utils.json_to_sheet(state.attendance);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
         
-        // Formata nome do arquivo com a data de hoje
         const dateStr = new Date().toISOString().slice(0, 10);
         XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
       }
@@ -454,7 +477,6 @@
         }
       }
 
-      // Inicia a aplicação
       init();
     })();
   </script>
