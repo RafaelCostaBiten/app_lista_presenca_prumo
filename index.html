@@ -267,20 +267,23 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
-        // Reduz a área para aprox 15% (metade do que estava) - garante no mínimo 100px para não bugar
+        // Área de cerca de 30% da tela (um pouco maior que 15% para facilitar mirar, 
+        // mas bem menor que a tela cheia). Mínimo de 150px para evitar cortes.
         const screenWidth = window.innerWidth;
-        const boxSize = Math.max(100, Math.floor(screenWidth * 0.15));
+        const boxSize = Math.max(150, Math.floor(screenWidth * 0.30));
 
         const scannerConfig = {
-          fps: 5, 
+          fps: 10, // Equilíbrio perfeito entre velocidade de leitura e tempo de processamento
           qrbox: { width: boxSize, height: boxSize }, 
-          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], // Foca 100% em QR Code
           
-          // Solicitação agressiva de resolução: Pede até 4K para forçar o limite físico da lente do celular
+          // Resolução HD (1280x720): Leve o suficiente para o celular não travar (como no 4K)
+          // mas nítido o bastante para ler a distância que a câmera frontal foca.
           videoConstraints: {
             facingMode: "user", 
-            width: { ideal: 3840 }, 
-            height: { ideal: 2160 }
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            advanced: [{ focusMode: "continuous" }]
           }
         };
         
