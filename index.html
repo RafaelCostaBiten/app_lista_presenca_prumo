@@ -13,7 +13,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
   <style>
-    /* Arquitetura CSS Baseada em Variáveis e Flexbox (Boas Práticas UI) */
     :root {
       --color-primary: #0f172a;
       --color-secondary: #3b82f6;
@@ -40,7 +39,6 @@
     
     p.helper-text { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
 
-    /* Estilização de Botões e Inputs */
     button { padding: 12px 16px; border: none; border-radius: var(--border-radius); font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; }
     button:active { transform: scale(0.98); }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -59,29 +57,53 @@
     input[type="file"], select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: var(--border-radius); background: #f8fafc; margin-bottom: 16px; outline: none; }
     input[type="file"]:focus, select:focus { border-color: var(--color-secondary); }
 
-    /* Tabela de Dados */
     .table-container { max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: var(--border-radius); margin-top: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
     th { background: #f8fafc; font-weight: 600; color: var(--color-primary); position: sticky; top: 0; }
 
-    /* Visualização Kiosk (Modo Scanner) */
     #scanner-view { display: none; flex-direction: column; gap: 16px; }
     body.kiosk-active #admin-view { display: none; }
     body.kiosk-active #scanner-view { display: flex; }
     
     #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
     
-    #feedback-card { padding: 20px; border-radius: var(--border-radius); text-align: center; color: white; transition: background 0.3s; min-height: 120px; display: flex; flex-direction: column; justify-content: center; background: var(--color-primary); }
-    #feedback-card.success { background: var(--color-success); }
-    #feedback-card.warning { background: var(--color-warning); }
-    #feedback-card.error { background: var(--color-danger); }
+    /* Efeito de Flash na tela inteira */
+    #flash-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none; z-index: 998;
+      opacity: 0; transition: opacity 0.15s ease-out;
+    }
+    #flash-overlay.flash-success { background-color: rgba(22, 163, 74, 0.4); opacity: 1; }
+    #flash-overlay.flash-warning { background-color: rgba(217, 119, 6, 0.4); opacity: 1; }
+    #flash-overlay.flash-error { background-color: rgba(220, 38, 38, 0.4); opacity: 1; }
+
+    /* Overlay Centralizado de Feedback */
+    #feedback-card {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      width: 85%; max-width: 400px;
+      z-index: 999; padding: 30px 20px;
+      border-radius: 16px; text-align: center; color: white;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      opacity: 0; visibility: hidden;
+      display: flex; flex-direction: column; justify-content: center;
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
     
-    #feedback-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 8px; }
-    #feedback-subtitle { font-size: 1rem; opacity: 0.9; }
+    #feedback-card.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+    #feedback-card.success { background: rgba(22, 163, 74, 0.95); }
+    #feedback-card.warning { background: rgba(217, 119, 6, 0.95); }
+    #feedback-card.error { background: rgba(220, 38, 38, 0.95); }
+    
+    #feedback-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; line-height: 1.1; }
+    #feedback-subtitle { font-size: 1.1rem; opacity: 0.9; }
   </style>
 </head>
 <body>
+
+  <!-- Overlay para o efeito de flash -->
+  <div id="flash-overlay"></div>
 
   <main class="app-container">
 
@@ -99,7 +121,7 @@
       <!-- Painel 2: Configuração da Câmera -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📷 2. Leitor de QR Code</h2>
-        <p class="helper-text">Selecione a câmera desejada (Frontal ou Traseira).</p>
+        <p class="helper-text">Selecione a câmera desejada.</p>
         <select id="camera-select">
           <option value="">Carregando câmeras...</option>
         </select>
@@ -123,7 +145,7 @@
         <div class="table-container">
           <table id="attendance-table">
             <thead>
-              <tr><th>ID</th><th>Nome</th><th>Hora do Check-in</th></tr>
+              <tr><th>ID</th><th>Nome</th><th>Hora</th></tr>
             </thead>
             <tbody id="attendance-tbody">
               <!-- Renderizado via JS -->
@@ -138,8 +160,8 @@
       <div id="reader-container"></div>
       
       <div id="feedback-card">
-        <div id="feedback-title">Pronto para Ler</div>
-        <div id="feedback-subtitle">Aponte o crachá para a câmera</div>
+        <div id="feedback-title"></div>
+        <div id="feedback-subtitle"></div>
       </div>
 
       <button id="btn-exit-scanner" class="btn-outline">
@@ -150,14 +172,12 @@
   </main>
 
   <script>
-    "use strict"; // Boas práticas: Impede declarações acidentais de variáveis globais
+    "use strict";
 
-    // Módulo Principal da Aplicação (IIFE para isolar o escopo)
     (function App() {
-      // Configurações e Estado
       const CONFIG = {
-        ADMIN_PIN: "1234", // PIN de Segurança da Interface
-        SCAN_COOLDOWN_MS: 2500 // Tempo de tela entre uma leitura e outra
+        ADMIN_PIN: "1234",
+        SCAN_COOLDOWN_MS: 2000 // Tempo suficiente para ler e ver a confirmação
       };
 
       const state = {
@@ -167,7 +187,6 @@
         isProcessing: false
       };
 
-      // Referências do DOM
       const dom = {
         fileInput: document.getElementById('excel-file'),
         empCount: document.getElementById('employee-count-label'),
@@ -181,10 +200,10 @@
         presCount: document.getElementById('present-count-label'),
         feedbackCard: document.getElementById('feedback-card'),
         feedbackTitle: document.getElementById('feedback-title'),
-        feedbackSubtitle: document.getElementById('feedback-subtitle')
+        feedbackSubtitle: document.getElementById('feedback-subtitle'),
+        flashOverlay: document.getElementById('flash-overlay')
       };
 
-      // --- Módulo de Áudio (Web Audio API) ---
       const AudioSys = {
         ctx: new (window.AudioContext || window.webkitAudioContext)(),
         play: function(freq, type, duration) {
@@ -204,7 +223,6 @@
         error: () => AudioSys.play(200, 'sawtooth', 0.4)
       };
 
-      // --- Inicialização ---
       function init() {
         bindEvents();
         updateDashboard();
@@ -220,7 +238,6 @@
         dom.btnClear.addEventListener('click', clearAttendance);
       }
 
-      // --- Lógica de Leitura de Excel (SheetJS) ---
       async function handleExcelUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -228,17 +245,12 @@
         try {
           const arrayBuffer = await file.arrayBuffer();
           const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-          
-          // Pega a primeira aba da planilha
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          
-          // Converte para JSON
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
           
           if (jsonData.length === 0) throw new Error("A planilha está vazia.");
           
-          // Identifica dinamicamente as chaves (ignorando case sensitive)
           let newEmployees = {};
           jsonData.forEach(row => {
             const keys = Object.keys(row);
@@ -252,9 +264,7 @@
             }
           });
 
-          if (Object.keys(newEmployees).length === 0) {
-            throw new Error("Não encontramos as colunas 'ID' e 'Nome' na planilha.");
-          }
+          if (Object.keys(newEmployees).length === 0) throw new Error("Não encontramos as colunas 'ID' e 'Nome'.");
 
           state.employees = newEmployees;
           localStorage.setItem("app_employees", JSON.stringify(state.employees));
@@ -262,16 +272,13 @@
           alert(`✅ Importação concluída! ${Object.keys(state.employees).length} funcionários carregados.`);
           updateDashboard();
         } catch (error) {
-          console.error("Erro na importação:", error);
-          alert(`❌ Erro ao ler a planilha: ${error.message}`);
+          alert(`❌ Erro: ${error.message}`);
         } finally {
-          dom.fileInput.value = ""; // Reseta o input
+          dom.fileInput.value = "";
         }
       }
 
-      // --- Lógica do Scanner e UI ---
       function loadCameras() {
-        // Aguarda a lib carregar via CDN
         window.addEventListener('load', () => {
           if (typeof Html5Qrcode === "undefined") return;
           Html5Qrcode.getCameras().then(devices => {
@@ -298,11 +305,22 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
+        // Câmera sem limitador (tela cheia) e focada 100% em QR Codes para máxima performance
+        const scannerConfig = {
+          fps: 10,
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          videoConstraints: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            advanced: [{ focusMode: "continuous" }] 
+          }
+        };
+        
         state.html5QrCode.start(
           camId, 
-          { fps: 10, qrbox: { width: 250, height: 250 } }, 
+          scannerConfig, 
           processScan, 
-          () => {} // Ignora erros de frame vazio
+          () => {} // Ignora frames vazios
         ).catch(err => {
           alert("Falha ao iniciar o scanner corporativo: " + err);
           document.body.classList.remove("kiosk-active");
@@ -320,7 +338,7 @@
           state.html5QrCode.stop().then(() => {
             document.body.classList.remove("kiosk-active");
             updateDashboard();
-          }).catch(err => console.error("Erro ao parar scanner", err));
+          }).catch(err => console.error("Erro ao parar", err));
         }
       }
 
@@ -334,22 +352,18 @@
         resetFeedbackUI();
 
         if (!employeeName) {
-          // Crachá não pertence à empresa / não listado
           AudioSys.error();
-          setFeedbackUI("error", "Não Encontrado", `ID [${idLido}] não consta no sistema.`);
+          setFeedbackUI("error", "Não Encontrado", `O ID [${idLido}] não consta na planilha carregada.`);
         } else {
           const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
           
           if (hasCheckedIn) {
-            // Tentativa de marcação dupla
             AudioSys.warning();
             setFeedbackUI("warning", employeeName, "Atenção: Presença já registrada hoje.");
           } else {
-            // Marcação com Sucesso
             AudioSys.success();
             const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             
-            // Adiciona no início do array
             state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
             localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
             
@@ -357,7 +371,6 @@
           }
         }
 
-        // Libera o scanner após o tempo configurado
         setTimeout(() => {
           resetFeedbackUI();
           state.isProcessing = false;
@@ -365,40 +378,32 @@
       }
 
       function setFeedbackUI(type, title, subtitle) {
-        dom.feedbackCard.className = type;
-        dom.feedbackTitle.textContent = title; // Seguro contra XSS
+        // Ativa o Flash na tela inteira
+        dom.flashOverlay.className = `flash-${type}`;
+        // Mostra o Popup centralizado
+        dom.feedbackCard.className = `${type} show`;
+        
+        dom.feedbackTitle.textContent = title;
         dom.feedbackSubtitle.textContent = subtitle;
       }
 
       function resetFeedbackUI() {
+        dom.flashOverlay.className = "";
         dom.feedbackCard.className = "";
-        dom.feedbackTitle.textContent = "Pronto para Ler";
-        dom.feedbackSubtitle.textContent = "Aponte o crachá para a câmera";
       }
 
-      // --- UI Admin e Exportação ---
       function updateDashboard() {
-        // Atualiza contadores
         dom.empCount.innerHTML = `<strong>${Object.keys(state.employees).length}</strong> funcionários na memória local.`;
         dom.presCount.textContent = state.attendance.length;
 
-        // Reconstrói a tabela de forma segura (Prevenção XSS via DOM API)
         dom.tbody.innerHTML = "";
         state.attendance.forEach(row => {
           const tr = document.createElement("tr");
+          const tdId = document.createElement("td"); tdId.textContent = row.id;
+          const tdNome = document.createElement("td"); tdNome.textContent = row.nome;
+          const tdHora = document.createElement("td"); tdHora.textContent = row.hora;
           
-          const tdId = document.createElement("td");
-          tdId.textContent = row.id;
-          
-          const tdNome = document.createElement("td");
-          tdNome.textContent = row.nome;
-          
-          const tdHora = document.createElement("td");
-          tdHora.textContent = row.hora;
-          
-          tr.appendChild(tdId);
-          tr.appendChild(tdNome);
-          tr.appendChild(tdHora);
+          tr.appendChild(tdId); tr.appendChild(tdNome); tr.appendChild(tdHora);
           dom.tbody.appendChild(tr);
         });
       }
@@ -406,12 +411,10 @@
       function exportToExcel() {
         if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
         
-        // Criação estruturada do Excel usando SheetJS
         const worksheet = XLSX.utils.json_to_sheet(state.attendance);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
         
-        // Formata nome do arquivo com a data de hoje
         const dateStr = new Date().toISOString().slice(0, 10);
         XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
       }
@@ -440,7 +443,6 @@
         }
       }
 
-      // Inicia a aplicação
       init();
     })();
   </script>
