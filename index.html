@@ -1,400 +1,273 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Sistema de Check-in Corporativo</title>
-  
-  <!-- Bibliotecas Seguras via CDN -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leitor de Presença (Crachás)</title>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212; /* Fundo escuro para poupar bateria e não ofuscar */
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-  <style>
-    /* Arquitetura CSS Baseada em Variáveis */
-    :root {
-      --color-primary: #0f172a;
-      --color-secondary: #3b82f6;
-      --color-success: #16a34a;
-      --color-warning: #d97706;
-      --color-danger: #dc2626;
-      --color-bg: #f1f5f9;
-      --color-surface: #ffffff;
-      --color-text: #334155;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
-      --border-radius: 8px;
-    }
+        #ui-container {
+            text-align: center;
+            z-index: 10;
+        }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    
-    body { background-color: var(--color-bg); color: var(--color-text); display: flex; justify-content: center; padding: 20px 10px; }
-    
-    .app-container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
-    
-    .panel { background: var(--color-surface); padding: 24px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid #e2e8f0; }
-    
-    h2 { font-size: 1.25rem; color: var(--color-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-    
-    p.helper-text { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
+        /* O vídeo fica escondido rodando em background para processamento, 
+           mas podemos mostrá-lo levemente translúcido se quiser feedback visual */
+        #video-preview {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.3; /* Muito escuro, pois você disse que não quer feedback visual na tela */
+            z-index: 1;
+        }
 
-    /* Botões e Inputs */
-    button { padding: 12px 16px; border: none; border-radius: var(--border-radius); font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; }
-    button:active { transform: scale(0.98); }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    
-    .btn-primary { background: var(--color-secondary); color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-excel { background: #107c41; color: white; }
-    .btn-excel:hover { background: #0c5e31; }
-    .btn-whatsapp { background: #25d366; color: white; }
-    .btn-whatsapp:hover { background: #1ebc5a; }
-    .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #475569; }
-    .btn-outline:hover { background: #f8fafc; }
-    
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        #start-btn {
+            background-color: #d97725; /* Cor padrão da empresa baseada nos crachás */
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(217, 119, 37, 0.4);
+            transition: transform 0.1s;
+        }
 
-    input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: var(--border-radius); background: #f8fafc; margin-bottom: 16px; outline: none; }
-    input[type="file"]:focus { border-color: var(--color-secondary); }
+        #start-btn:active {
+            transform: scale(0.95);
+        }
 
-    /* Tabela */
-    .table-container { max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: var(--border-radius); margin-top: 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-    th { background: #f8fafc; font-weight: 600; color: var(--color-primary); position: sticky; top: 0; }
+        #status-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #aaaaaa;
+        }
 
-    /* Visualização Kiosk */
-    #scanner-view { display: none; flex-direction: column; gap: 16px; }
-    body.kiosk-active #admin-view { display: none; }
-    body.kiosk-active #scanner-view { display: flex; }
-    
-    #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
-    
-    /* EFEITO ESPELHO: Inverte o vídeo horizontalmente para agir como um espelho de verdade */
-    #reader-container video {
-      transform: scaleX(-1) !important;
-    }
+        #ultimo-registro {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
 
-    /* Overlay Centralizado */
-    #feedback-overlay {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.9);
-      width: 85%;
-      max-width: 400px;
-      z-index: 9999;
-      padding: 30px 20px;
-      border-radius: 16px;
-      text-align: center;
-      color: white;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
+        /* Canvas invisível usado pelo jsQR para processar a imagem da câmera */
+        #canvas-processamento {
+            display: none; 
+        }
+    </style>
     
-    #feedback-overlay.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
-    #feedback-overlay.success { background: rgba(22, 163, 74, 0.95); }
-    #feedback-overlay.warning { background: rgba(217, 119, 6, 0.95); }
-    #feedback-overlay.error { background: rgba(220, 38, 38, 0.95); }
-    
-    #feedback-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; }
-    #feedback-subtitle { font-size: 1.1rem; opacity: 0.9; }
-  </style>
+    <!-- Biblioteca externa super leve para ler o QR Code da imagem -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
 
-  <main class="app-container">
-    <section id="admin-view">
-      
-      <div class="panel" style="margin-bottom: 20px;">
-        <h2>📊 1. Base de Funcionários</h2>
-        <p class="helper-text">Importe a planilha <b>.xlsx</b>. As colunas devem se chamar obrigatoriamente <b>ID</b> e <b>Nome</b>.</p>
-        <input type="file" id="excel-file" accept=".xlsx, .xls">
-        <p id="employee-count-label"><strong>0</strong> funcionários sincronizados na memória local.</p>
-      </div>
+    <video id="video-preview" playsinline muted hidden></video>
+    <canvas id="canvas-processamento"></canvas>
 
-      <div class="panel" style="margin-bottom: 20px;">
-        <h2>📷 2. Leitor de QR Code</h2>
-        <p class="helper-text">O sistema ativará a <b>Câmera Frontal</b> em tela cheia.</p>
-        <button id="btn-start-scanner" class="btn-primary">
-          ▶ Iniciar Modo de Escaneamento
-        </button>
-      </div>
+    <div id="ui-container">
+        <!-- O botão é OBRIGATÓRIO porque navegadores bloqueiam câmera e áudio sem clique do usuário -->
+        <button id="start-btn">INICIAR LEITORA</button>
+        <div id="status-text">Aguardando início...</div>
+        <div id="ultimo-registro"></div>
+    </div>
 
-      <div class="panel">
-        <h2>📑 3. Lista de Presença de Hoje</h2>
-        <p class="helper-text">Total confirmados: <strong id="present-count-label">0</strong></p>
+    <script>
+        let streamOriginal = null;
+        let trackCamera = null;
+        let canvasElement = document.getElementById("canvas-processamento");
+        let canvas = canvasElement.getContext("2d");
+        let video = document.getElementById("video-preview");
+        let btnStart = document.getElementById("start-btn");
+        let statusText = document.getElementById("status-text");
+        let textUltimoRegistro = document.getElementById("ultimo-registro");
         
-        <div class="grid-2">
-          <button id="btn-export-excel" class="btn-excel">Exportar .xlsx</button>
-          <button id="btn-export-wa" class="btn-whatsapp">Enviar WhatsApp</button>
-        </div>
+        let processandoQR = false;
         
-        <button id="btn-clear-data" class="btn-outline">Zerar Lista (Fim de Expediente)</button>
+        // Banco de dados em memória (quem já passou)
+        const registrosPresentes = new Set();
+        
+        // Configuração de Áudio (Sintetizador no Navegador)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
 
-        <div class="table-container">
-          <table id="attendance-table">
-            <thead>
-              <tr><th>ID</th><th>Nome</th><th>Hora</th></tr>
-            </thead>
-            <tbody id="attendance-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+        function tocarSom(frequencia, tipo, duracao, delayIncial = 0) {
+            if (!audioCtx) return;
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.type = tipo; // 'sine', 'square', 'sawtooth', 'triangle'
+            oscillator.frequency.setValueAtTime(frequencia, audioCtx.currentTime + delayIncial);
+            
+            // Envelope de volume (começa alto, decai rápido para não dar 'estalo')
+            gainNode.gain.setValueAtTime(1, audioCtx.currentTime + delayIncial);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delayIncial + duracao);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.start(audioCtx.currentTime + delayIncial);
+            oscillator.stop(audioCtx.currentTime + delayIncial + duracao);
+        }
 
-    <section id="scanner-view">
-      <div id="reader-container"></div>
-      <button id="btn-exit-scanner" class="btn-outline">
-        🔒 Sair do Modo Leitor (Requer PIN)
-      </button>
-    </section>
-  </main>
+        function somCheckPositivo() {
+            // Um som alegre de sucesso (Arpejo rápido: Dó - Mi)
+            tocarSom(523.25, 'sine', 0.15, 0);       // C5
+            tocarSom(659.25, 'sine', 0.25, 0.1);     // E5
+        }
 
-  <!-- Overlay Modal Flutuante -->
-  <div id="feedback-overlay">
-    <div id="feedback-title"></div>
-    <div id="feedback-subtitle"></div>
-  </div>
+        function somJaRegistrado() {
+            // Um som neutro/baixo, apenas indicando que leu, mas já existia.
+            tocarSom(300, 'triangle', 0.3, 0);       // Som opaco e único
+        }
 
-  <script>
-    "use strict"; 
-
-    (function App() {
-      const CONFIG = {
-        ADMIN_PIN: "1234", 
-        SCAN_COOLDOWN_MS: 1500 
-      };
-
-      const state = {
-        employees: JSON.parse(localStorage.getItem("app_employees")) || {},
-        attendance: JSON.parse(localStorage.getItem("app_attendance")) || [],
-        html5QrCode: null,
-        isProcessing: false
-      };
-
-      const dom = {
-        fileInput: document.getElementById('excel-file'),
-        empCount: document.getElementById('employee-count-label'),
-        btnStart: document.getElementById('btn-start-scanner'),
-        btnExit: document.getElementById('btn-exit-scanner'),
-        btnExcel: document.getElementById('btn-export-excel'),
-        btnWa: document.getElementById('btn-export-wa'),
-        btnClear: document.getElementById('btn-clear-data'),
-        tbody: document.getElementById('attendance-tbody'),
-        presCount: document.getElementById('present-count-label'),
-        feedbackOverlay: document.getElementById('feedback-overlay'),
-        feedbackTitle: document.getElementById('feedback-title'),
-        feedbackSubtitle: document.getElementById('feedback-subtitle')
-      };
-
-      const AudioSys = {
-        ctx: new (window.AudioContext || window.webkitAudioContext)(),
-        play: function(freq, type, duration) {
-          if (this.ctx.state === 'suspended') this.ctx.resume();
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = type;
-          osc.frequency.value = freq;
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.start();
-          gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration);
-          osc.stop(this.ctx.currentTime + duration);
-        },
-        success: () => AudioSys.play(900, 'sine', 0.15),
-        warning: () => { AudioSys.play(400, 'triangle', 0.15); setTimeout(() => AudioSys.play(400, 'triangle', 0.15), 200); },
-        error: () => AudioSys.play(200, 'sawtooth', 0.4)
-      };
-
-      function init() {
-        bindEvents();
-        updateDashboard();
-      }
-
-      function bindEvents() {
-        dom.fileInput.addEventListener('change', handleExcelUpload);
-        dom.btnStart.addEventListener('click', startKioskMode);
-        dom.btnExit.addEventListener('click', exitKioskMode);
-        dom.btnExcel.addEventListener('click', exportToExcel);
-        dom.btnWa.addEventListener('click', shareToWhatsApp);
-        dom.btnClear.addEventListener('click', clearAttendance);
-      }
-
-      async function handleExcelUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-          
-          if (jsonData.length === 0) throw new Error("A planilha está vazia.");
-          
-          let newEmployees = {};
-          jsonData.forEach(row => {
-            const keys = Object.keys(row);
-            const idKey = keys.find(k => k.toLowerCase() === 'id');
-            const nomeKey = keys.find(k => k.toLowerCase() === 'nome');
-            if (idKey && nomeKey && row[idKey]) {
-              newEmployees[String(row[idKey]).trim()] = String(row[nomeKey]).trim();
+        async function piscarFlashRapido() {
+            if (!trackCamera) return;
+            
+            try {
+                // Verifica se a câmera traseira tem suporte a lanterna (flash)
+                const capacidades = trackCamera.getCapabilities();
+                if (capacidades.torch) {
+                    // Liga o flash
+                    await trackCamera.applyConstraints({ advanced: [{ torch: true }] });
+                    
+                    // Desliga muito rápido (100 milissegundos) para servir de "feedback visual"
+                    setTimeout(async () => {
+                        try {
+                            await trackCamera.applyConstraints({ advanced: [{ torch: false }] });
+                        } catch(e) { /* ignora erro ao desligar */ }
+                    }, 100); 
+                }
+            } catch (erro) {
+                console.log("Aparelho/Navegador não suporta controle de Flash.", erro);
             }
-          });
-
-          if (Object.keys(newEmployees).length === 0) throw new Error("Não encontramos as colunas 'ID' e 'Nome'.");
-          
-          state.employees = newEmployees;
-          localStorage.setItem("app_employees", JSON.stringify(state.employees));
-          alert(`✅ Importação concluída! ${Object.keys(state.employees).length} funcionários carregados.`);
-          updateDashboard();
-        } catch (error) {
-          alert(`❌ Erro: ${error.message}`);
-        } finally {
-          dom.fileInput.value = ""; 
         }
-      }
 
-      function startKioskMode() {
-        document.body.classList.add("kiosk-active");
-        state.html5QrCode = new Html5Qrcode("reader-container");
-        
-        // Área de cerca de 30% da tela (um pouco maior que 15% para facilitar mirar, 
-        // mas bem menor que a tela cheia). Mínimo de 150px para evitar cortes.
-        const screenWidth = window.innerWidth;
-        const boxSize = Math.max(150, Math.floor(screenWidth * 0.30));
+        function escanearContinuamente() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                
+                // Desenha o frame do vídeo no canvas invisível
+                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Extrai a imagem
+                var imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                
+                // Passa pelo jsQR
+                var codigo = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
 
-        const scannerConfig = {
-          fps: 10, // Equilíbrio perfeito entre velocidade de leitura e tempo de processamento
-          qrbox: { width: boxSize, height: boxSize }, 
-          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], // Foca 100% em QR Code
-          
-          // Resolução HD (1280x720): Leve o suficiente para o celular não travar (como no 4K)
-          // mas nítido o bastante para ler a distância que a câmera frontal foca.
-          videoConstraints: {
-            facingMode: "user", 
-            width: { ideal: 1280 }, 
-            height: { ideal: 720 },
-            advanced: [{ focusMode: "continuous" }]
-          }
-        };
-        
-        state.html5QrCode.start(
-          { facingMode: "user" },
-          scannerConfig, 
-          processScan, 
-          () => {} 
-        ).catch(err => {
-          alert("Falha ao iniciar a câmera: " + err);
-          document.body.classList.remove("kiosk-active");
+                if (codigo && !processandoQR) {
+                    // Encontrou um QR!
+                    processandoQR = true; 
+                    registrarPresenca(codigo.data);
+                    
+                    // Trava de 2 segundos para não ler o mesmo crachá 60 vezes por segundo
+                    setTimeout(() => { processandoQR = false; }, 2000); 
+                }
+            }
+            requestAnimationFrame(escanearContinuamente);
+        }
+
+        function registrarPresenca(idColaborador) {
+            // Pisca o flash da câmera!
+            piscarFlashRapido();
+
+            // Pega apenas a matrícula, removendo sujeiras se houver
+            let matricula = idColaborador.trim().toUpperCase();
+
+            // Verifica se já passou hoje
+            if (registrosPresentes.has(matricula)) {
+                somJaRegistrado();
+                textUltimoRegistro.style.color = "#aaaaaa";
+                textUltimoRegistro.innerText = `Re-lido: ${matricula}`;
+                console.log("Já registrado:", matricula);
+            } else {
+                somCheckPositivo();
+                registrosPresentes.add(matricula);
+                textUltimoRegistro.style.color = "#4CAF50"; // Verde
+                textUltimoRegistro.innerText = `✅ Sucesso: ${matricula}`;
+                console.log("Novo registro:", matricula);
+            }
+        }
+
+        btnStart.addEventListener("click", async () => {
+            try {
+                // Inicia o contexto de áudio agora que o usuário clicou (Políticas de segurança do Chrome)
+                if (!audioCtx) {
+                    audioCtx = new AudioContext();
+                }
+
+                btnStart.innerText = "Conectando Câmera...";
+                
+                // Pede a câmera estritamente traseira ("environment")
+                const constraints = {
+                    video: { facingMode: { exact: "environment" } },
+                    audio: false
+                };
+
+                streamOriginal = await navigator.mediaDevices.getUserMedia(constraints);
+                trackCamera = streamOriginal.getVideoTracks()[0];
+                
+                video.srcObject = streamOriginal;
+                video.setAttribute("playsinline", true); // Necessário para iOS
+                video.hidden = false;
+                video.play();
+
+                btnStart.style.display = "none";
+                statusText.innerText = "Câmera ativa. Escaneando crachás...";
+
+                // Inicia o loop de análise de vídeo
+                requestAnimationFrame(escanearContinuamente);
+
+            } catch (erro) {
+                console.error("Erro na Câmera:", erro);
+                // Fallback: Tenta pegar qualquer câmera se o celular não informar que tem "traseira"
+                if (erro.name === "OverconstrainedError") {
+                   statusText.innerText = "Câmera traseira específica não encontrada. Tentando câmera padrão...";
+                   tentaCameraAlternativa();
+                } else {
+                   statusText.innerText = "Erro ao acessar câmera: Permissão Negada ou Indisponível.";
+                   btnStart.innerText = "Tentar Novamente";
+                }
+            }
         });
-      }
 
-      function exitKioskMode() {
-        const pin = prompt("🔐 Área Restrita. Digite o PIN da Portaria:");
-        if (pin !== CONFIG.ADMIN_PIN) {
-          if (pin !== null) alert("PIN Incorreto!");
-          return;
+        async function tentaCameraAlternativa() {
+             try {
+                streamOriginal = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                trackCamera = streamOriginal.getVideoTracks()[0];
+                video.srcObject = streamOriginal;
+                video.setAttribute("playsinline", true);
+                video.hidden = false;
+                video.play();
+                
+                btnStart.style.display = "none";
+                statusText.innerText = "Câmera secundária ativa. Escaneando...";
+                requestAnimationFrame(escanearContinuamente);
+             } catch(e) {
+                 statusText.innerText = "Nenhuma câmera traseira funcionou.";
+             }
         }
-        if (state.html5QrCode) {
-          state.html5QrCode.stop().then(() => {
-            document.body.classList.remove("kiosk-active");
-            updateDashboard();
-          }).catch(err => console.error("Erro ao parar scanner", err));
-        }
-      }
-
-      function processScan(decodedText) {
-        if (state.isProcessing) return;
-        state.isProcessing = true;
-
-        const idLido = String(decodedText).trim();
-        const employeeName = state.employees[idLido];
-        
-        if (!employeeName) {
-          AudioSys.error();
-          setFeedbackUI("error", "Não Encontrado", `ID [${idLido}] não consta.`);
-        } else {
-          const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
-          if (hasCheckedIn) {
-            AudioSys.warning();
-            setFeedbackUI("warning", employeeName, "Presença já registrada!");
-          } else {
-            AudioSys.success();
-            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
-            localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
-            setFeedbackUI("success", employeeName, `Confirmado às ${timeStr}`);
-          }
-        }
-
-        setTimeout(() => {
-          resetFeedbackUI();
-          state.isProcessing = false;
-        }, CONFIG.SCAN_COOLDOWN_MS);
-      }
-
-      function setFeedbackUI(type, title, subtitle) {
-        dom.feedbackOverlay.className = `${type} show`;
-        dom.feedbackTitle.textContent = title; 
-        dom.feedbackSubtitle.textContent = subtitle;
-      }
-
-      function resetFeedbackUI() {
-        dom.feedbackOverlay.className = "";
-      }
-
-      function updateDashboard() {
-        dom.empCount.innerHTML = `<strong>${Object.keys(state.employees).length}</strong> funcionários na memória local.`;
-        dom.presCount.textContent = state.attendance.length;
-        dom.tbody.innerHTML = "";
-        
-        state.attendance.forEach(row => {
-          const tr = document.createElement("tr");
-          const tdId = document.createElement("td"); tdId.textContent = row.id;
-          const tdNome = document.createElement("td"); tdNome.textContent = row.nome;
-          const tdHora = document.createElement("td"); tdHora.textContent = row.hora;
-          tr.appendChild(tdId); tr.appendChild(tdNome); tr.appendChild(tdHora);
-          dom.tbody.appendChild(tr);
-        });
-      }
-
-      function exportToExcel() {
-        if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
-        const worksheet = XLSX.utils.json_to_sheet(state.attendance);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
-        const dateStr = new Date().toISOString().slice(0, 10);
-        XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
-      }
-
-      function shareToWhatsApp() {
-        if (state.attendance.length === 0) return alert("Lista vazia.");
-        const dateStr = new Date().toLocaleDateString('pt-BR');
-        let text = `*Lista de Presença - ${dateStr}*\n*Total Presentes:* ${state.attendance.length}\n\n`;
-        state.attendance.forEach(rec => text += `✅ ${rec.nome} - ${rec.hora}\n`);
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-      }
-
-      function clearAttendance() {
-        if (state.attendance.length === 0) return;
-        if (confirm("⚠️ Deseja limpar a lista de hoje? Exporte antes de limpar!")) {
-          state.attendance = [];
-          localStorage.removeItem("app_attendance");
-          updateDashboard();
-        }
-      }
-
-      init();
-    })();
-  </script>
+    </script>
 </body>
 </html>
