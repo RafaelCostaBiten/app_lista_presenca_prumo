@@ -7,11 +7,13 @@
   <title>Sistema de Check-in Corporativo</title>
   
   <!-- Bibliotecas Seguras via CDN (Content Delivery Network) -->
+  <!-- Leitor de QR Code -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+  <!-- Manipulador de Arquivos Excel (SheetJS) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
   <style>
-    /* Arquitetura CSS Baseada em Variáveis e Flexbox */
+    /* Arquitetura CSS Baseada em Variáveis e Flexbox (Boas Práticas UI) */
     :root {
       --color-primary: #0f172a;
       --color-secondary: #3b82f6;
@@ -70,12 +72,6 @@
     
     #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
     
-    /* Efeito de espelhamento dinâmico (somente aplicado na câmera frontal) */
-    #reader-container.mirror-mode video {
-      transform: scaleX(-1) !important;
-    }
-
-    /* Feedback visual de leitura */
     #feedback-card { padding: 20px; border-radius: var(--border-radius); text-align: center; color: white; transition: background 0.3s; min-height: 120px; display: flex; flex-direction: column; justify-content: center; background: var(--color-primary); }
     #feedback-card.success { background: var(--color-success); }
     #feedback-card.warning { background: var(--color-warning); }
@@ -88,8 +84,10 @@
 <body>
 
   <main class="app-container">
+
     <!-- VISÃO DO ADMINISTRADOR -->
     <section id="admin-view">
+      
       <!-- Painel 1: Base de Dados -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📊 1. Base de Funcionários</h2>
@@ -101,7 +99,7 @@
       <!-- Painel 2: Configuração da Câmera -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📷 2. Leitor de QR Code</h2>
-        <p class="helper-text">Selecione a câmera (Traseira ou Frontal).</p>
+        <p class="helper-text">Selecione a câmera desejada (Frontal ou Traseira).</p>
         <select id="camera-select">
           <option value="">Carregando câmeras...</option>
         </select>
@@ -141,22 +139,25 @@
       
       <div id="feedback-card">
         <div id="feedback-title">Pronto para Ler</div>
-        <div id="feedback-subtitle">Aponte a câmera para o crachá</div>
+        <div id="feedback-subtitle">Aponte o crachá para a câmera</div>
       </div>
 
       <button id="btn-exit-scanner" class="btn-outline">
         🔒 Sair do Modo Leitor (Requer PIN)
       </button>
     </section>
+
   </main>
 
   <script>
-    "use strict";
+    "use strict"; // Boas práticas: Impede declarações acidentais de variáveis globais
 
+    // Módulo Principal da Aplicação (IIFE para isolar o escopo)
     (function App() {
+      // Configurações e Estado
       const CONFIG = {
-        ADMIN_PIN: "1234",
-        SCAN_COOLDOWN_MS: 2000 // Reduzido para agilizar o próximo da fila
+        ADMIN_PIN: "1234", // PIN de Segurança da Interface
+        SCAN_COOLDOWN_MS: 2500 // Tempo de tela entre uma leitura e outra
       };
 
       const state = {
@@ -166,6 +167,7 @@
         isProcessing: false
       };
 
+      // Referências do DOM
       const dom = {
         fileInput: document.getElementById('excel-file'),
         empCount: document.getElementById('employee-count-label'),
@@ -179,10 +181,10 @@
         presCount: document.getElementById('present-count-label'),
         feedbackCard: document.getElementById('feedback-card'),
         feedbackTitle: document.getElementById('feedback-title'),
-        feedbackSubtitle: document.getElementById('feedback-subtitle'),
-        readerContainer: document.getElementById('reader-container')
+        feedbackSubtitle: document.getElementById('feedback-subtitle')
       };
 
+      // --- Módulo de Áudio (Web Audio API) ---
       const AudioSys = {
         ctx: new (window.AudioContext || window.webkitAudioContext)(),
         play: function(freq, type, duration) {
@@ -202,6 +204,7 @@
         error: () => AudioSys.play(200, 'sawtooth', 0.4)
       };
 
+      // --- Inicialização ---
       function init() {
         bindEvents();
         updateDashboard();
@@ -217,6 +220,7 @@
         dom.btnClear.addEventListener('click', clearAttendance);
       }
 
+      // --- Lógica de Leitura de Excel (SheetJS) ---
       async function handleExcelUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -224,36 +228,50 @@
         try {
           const arrayBuffer = await file.arrayBuffer();
           const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          
+          // Pega a primeira aba da planilha
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Converte para JSON
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
           
           if (jsonData.length === 0) throw new Error("A planilha está vazia.");
           
+          // Identifica dinamicamente as chaves (ignorando case sensitive)
           let newEmployees = {};
           jsonData.forEach(row => {
             const keys = Object.keys(row);
             const idKey = keys.find(k => k.toLowerCase() === 'id');
             const nomeKey = keys.find(k => k.toLowerCase() === 'nome');
+            
             if (idKey && nomeKey && row[idKey]) {
-              newEmployees[String(row[idKey]).trim()] = String(row[nomeKey]).trim();
+              const id = String(row[idKey]).trim();
+              const nome = String(row[nomeKey]).trim();
+              newEmployees[id] = nome;
             }
           });
 
-          if (Object.keys(newEmployees).length === 0) throw new Error("Não encontramos as colunas 'ID' e 'Nome'.");
-          
+          if (Object.keys(newEmployees).length === 0) {
+            throw new Error("Não encontramos as colunas 'ID' e 'Nome' na planilha.");
+          }
+
           state.employees = newEmployees;
           localStorage.setItem("app_employees", JSON.stringify(state.employees));
+          
           alert(`✅ Importação concluída! ${Object.keys(state.employees).length} funcionários carregados.`);
           updateDashboard();
         } catch (error) {
-          alert(`❌ Erro: ${error.message}`);
+          console.error("Erro na importação:", error);
+          alert(`❌ Erro ao ler a planilha: ${error.message}`);
         } finally {
-          dom.fileInput.value = ""; 
+          dom.fileInput.value = ""; // Reseta o input
         }
       }
 
+      // --- Lógica do Scanner e UI ---
       function loadCameras() {
+        // Aguarda a lib carregar via CDN
         window.addEventListener('load', () => {
           if (typeof Html5Qrcode === "undefined") return;
           Html5Qrcode.getCameras().then(devices => {
@@ -277,36 +295,14 @@
           return;
         }
 
-        // Descobre se a câmera escolhida é a frontal para aplicar o espelho
-        const selectedLabel = dom.camSelect.options[dom.camSelect.selectedIndex].text.toLowerCase();
-        if (selectedLabel.includes("front") || selectedLabel.includes("user") || selectedLabel.includes("frontal")) {
-          dom.readerContainer.classList.add("mirror-mode");
-        } else {
-          // Remove o espelho na câmera traseira para você não ficar perdido ao enquadrar
-          dom.readerContainer.classList.remove("mirror-mode");
-        }
-
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
-        // CONFIGURAÇÕES FULL FRAME:
-        // Sem 'qrbox', o leitor usará a área inteira da câmera automaticamente.
-        const scannerConfig = {
-          fps: 10,
-          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], // Foco 100% em QR
-          videoConstraints: {
-            width: { ideal: 1280 }, // Resolução HD é o melhor balanço
-            height: { ideal: 720 },
-            advanced: [{ focusMode: "continuous" }]
-          }
-        };
-        
-        // Agora passando o ID específico da câmera selecionada pelo usuário
         state.html5QrCode.start(
           camId, 
-          scannerConfig, 
+          { fps: 10, qrbox: { width: 250, height: 250 } }, 
           processScan, 
-          () => {} 
+          () => {} // Ignora erros de frame vazio
         ).catch(err => {
           alert("Falha ao iniciar o scanner corporativo: " + err);
           document.body.classList.remove("kiosk-active");
@@ -319,6 +315,7 @@
           if (pin !== null) alert("PIN Incorreto!");
           return;
         }
+
         if (state.html5QrCode) {
           state.html5QrCode.stop().then(() => {
             document.body.classList.remove("kiosk-active");
@@ -334,23 +331,33 @@
         const idLido = String(decodedText).trim();
         const employeeName = state.employees[idLido];
         
+        resetFeedbackUI();
+
         if (!employeeName) {
+          // Crachá não pertence à empresa / não listado
           AudioSys.error();
-          setFeedbackUI("error", "Não Encontrado", `ID [${idLido}] não consta.`);
+          setFeedbackUI("error", "Não Encontrado", `ID [${idLido}] não consta no sistema.`);
         } else {
           const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
+          
           if (hasCheckedIn) {
+            // Tentativa de marcação dupla
             AudioSys.warning();
-            setFeedbackUI("warning", employeeName, "Presença já registrada!");
+            setFeedbackUI("warning", employeeName, "Atenção: Presença já registrada hoje.");
           } else {
+            // Marcação com Sucesso
             AudioSys.success();
             const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            // Adiciona no início do array
             state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
             localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
-            setFeedbackUI("success", employeeName, `Confirmado às ${timeStr}`);
+            
+            setFeedbackUI("success", employeeName, `Check-in confirmado às ${timeStr}`);
           }
         }
 
+        // Libera o scanner após o tempo configurado
         setTimeout(() => {
           resetFeedbackUI();
           state.isProcessing = false;
@@ -359,57 +366,81 @@
 
       function setFeedbackUI(type, title, subtitle) {
         dom.feedbackCard.className = type;
-        dom.feedbackTitle.textContent = title; 
+        dom.feedbackTitle.textContent = title; // Seguro contra XSS
         dom.feedbackSubtitle.textContent = subtitle;
       }
 
       function resetFeedbackUI() {
         dom.feedbackCard.className = "";
         dom.feedbackTitle.textContent = "Pronto para Ler";
-        dom.feedbackSubtitle.textContent = "Aponte a câmera para o crachá";
+        dom.feedbackSubtitle.textContent = "Aponte o crachá para a câmera";
       }
 
+      // --- UI Admin e Exportação ---
       function updateDashboard() {
+        // Atualiza contadores
         dom.empCount.innerHTML = `<strong>${Object.keys(state.employees).length}</strong> funcionários na memória local.`;
         dom.presCount.textContent = state.attendance.length;
+
+        // Reconstrói a tabela de forma segura (Prevenção XSS via DOM API)
         dom.tbody.innerHTML = "";
-        
         state.attendance.forEach(row => {
           const tr = document.createElement("tr");
-          const tdId = document.createElement("td"); tdId.textContent = row.id;
-          const tdNome = document.createElement("td"); tdNome.textContent = row.nome;
-          const tdHora = document.createElement("td"); tdHora.textContent = row.hora;
-          tr.appendChild(tdId); tr.appendChild(tdNome); tr.appendChild(tdHora);
+          
+          const tdId = document.createElement("td");
+          tdId.textContent = row.id;
+          
+          const tdNome = document.createElement("td");
+          tdNome.textContent = row.nome;
+          
+          const tdHora = document.createElement("td");
+          tdHora.textContent = row.hora;
+          
+          tr.appendChild(tdId);
+          tr.appendChild(tdNome);
+          tr.appendChild(tdHora);
           dom.tbody.appendChild(tr);
         });
       }
 
       function exportToExcel() {
         if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
+        
+        // Criação estruturada do Excel usando SheetJS
         const worksheet = XLSX.utils.json_to_sheet(state.attendance);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
+        
+        // Formata nome do arquivo com a data de hoje
         const dateStr = new Date().toISOString().slice(0, 10);
         XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
       }
 
       function shareToWhatsApp() {
         if (state.attendance.length === 0) return alert("Lista vazia.");
+        
         const dateStr = new Date().toLocaleDateString('pt-BR');
-        let text = `*Lista de Presença - ${dateStr}*\n*Total Presentes:* ${state.attendance.length}\n\n`;
-        state.attendance.forEach(rec => text += `✅ ${rec.nome} - ${rec.hora}\n`);
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        let text = `*Lista de Presença - ${dateStr}*\n`;
+        text += `*Total Presentes:* ${state.attendance.length}\n\n`;
+        
+        state.attendance.forEach(rec => {
+          text += `✅ ${rec.nome} - ${rec.hora}\n`;
+        });
+
+        const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
       }
 
       function clearAttendance() {
         if (state.attendance.length === 0) return;
-        if (confirm("⚠️ Deseja limpar a lista de hoje? Exporte antes de limpar!")) {
+        if (confirm("⚠️ Tem certeza que deseja limpar a lista de presença de hoje? Exporte os dados antes de limpar!")) {
           state.attendance = [];
           localStorage.removeItem("app_attendance");
           updateDashboard();
         }
       }
 
+      // Inicia a aplicação
       init();
     })();
   </script>
