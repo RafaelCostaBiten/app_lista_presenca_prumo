@@ -3,331 +3,446 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de Presença</title>
-  <!-- Biblioteca leve para leitura de QR Code via câmera -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <style>
-    :root {
-      --primary: #1e3a8a;
-      --success: #15803d;
-      --warning: #b45309;
-      --danger: #b91c1c;
-      --bg: #f8fafc;
-    }
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }
-    body { background: var(--bg); color: #1e293b; padding: 16px; display: flex; flex-direction: column; align-items: center; }
-    .container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 16px; }
-    .card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    h2 { font-size: 1.2rem; margin-bottom: 12px; color: var(--primary); }
-    button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.2s; }
-    .btn-main { background: var(--primary); color: white; width: 100%; }
-    .btn-secondary { background: #e2e8f0; color: #334155; }
-    .btn-danger { background: var(--danger); color: white; }
-    .btn-wa { background: #25d366; color: white; }
-    .btn-excel { background: #107c41; color: white; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    
-    /* Modo Scanner (Tela Cheia / Kiosk) */
-    #scanner-view { display: none; }
-    body.kiosk #admin-view { display: none; }
-    body.kiosk #scanner-view { display: flex; flex-direction: column; width: 100%; max-width: 500px; gap: 12px; }
-    #reader { width: 100%; border-radius: 12px; overflow: hidden; background: black; }
-    
-    /* Feedback visual de presença */
-    #status-card {
-      min-height: 90px;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 12px;
-      font-weight: bold;
-      color: white;
-      background: #475569;
-      transition: background 0.3s;
-    }
-    #status-card.success { background: var(--success); }
-    #status-card.warning { background: var(--warning); }
-    #status-card.error { background: var(--danger); }
-    #status-name { font-size: 1.3rem; }
-    #status-msg { font-size: 0.95rem; font-weight: normal; margin-top: 4px; }
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Sistema de Check-in Corporativo</title>
+  
+  <!-- Bibliotecas Seguras via CDN (Content Delivery Network) -->
+  <!-- Leitor de QR Code -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+  <!-- Manipulador de Arquivos Excel (SheetJS) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.9rem; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-    th { background: #f1f5f9; }
-    select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+  <style>
+    /* Arquitetura CSS Baseada em Variáveis e Flexbox (Boas Práticas UI) */
+    :root {
+      --color-primary: #0f172a;
+      --color-secondary: #3b82f6;
+      --color-success: #16a34a;
+      --color-warning: #d97706;
+      --color-danger: #dc2626;
+      --color-bg: #f1f5f9;
+      --color-surface: #ffffff;
+      --color-text: #334155;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+      --border-radius: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    
+    body { background-color: var(--color-bg); color: var(--color-text); display: flex; justify-content: center; padding: 20px 10px; }
+    
+    .app-container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
+    
+    .panel { background: var(--color-surface); padding: 24px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid #e2e8f0; }
+    
+    h2 { font-size: 1.25rem; color: var(--color-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    
+    p.helper-text { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
+
+    /* Estilização de Botões e Inputs */
+    button { padding: 12px 16px; border: none; border-radius: var(--border-radius); font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    
+    .btn-primary { background: var(--color-secondary); color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-excel { background: #107c41; color: white; }
+    .btn-excel:hover { background: #0c5e31; }
+    .btn-whatsapp { background: #25d366; color: white; }
+    .btn-whatsapp:hover { background: #1ebc5a; }
+    .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #475569; }
+    .btn-outline:hover { background: #f8fafc; }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+
+    input[type="file"], select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: var(--border-radius); background: #f8fafc; margin-bottom: 16px; outline: none; }
+    input[type="file"]:focus, select:focus { border-color: var(--color-secondary); }
+
+    /* Tabela de Dados */
+    .table-container { max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: var(--border-radius); margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f8fafc; font-weight: 600; color: var(--color-primary); position: sticky; top: 0; }
+
+    /* Visualização Kiosk (Modo Scanner) */
+    #scanner-view { display: none; flex-direction: column; gap: 16px; }
+    body.kiosk-active #admin-view { display: none; }
+    body.kiosk-active #scanner-view { display: flex; }
+    
+    #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
+    
+    #feedback-card { padding: 20px; border-radius: var(--border-radius); text-align: center; color: white; transition: background 0.3s; min-height: 120px; display: flex; flex-direction: column; justify-content: center; background: var(--color-primary); }
+    #feedback-card.success { background: var(--color-success); }
+    #feedback-card.warning { background: var(--color-warning); }
+    #feedback-card.error { background: var(--color-danger); }
+    
+    #feedback-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 8px; }
+    #feedback-subtitle { font-size: 1rem; opacity: 0.9; }
   </style>
 </head>
 <body>
 
-<div class="container">
+  <main class="app-container">
 
-  <!-- PAINEL ADMINISTRATIVO -->
-  <div id="admin-view" class="container">
-    <div class="card">
-      <h2>1. Lista de Funcionários</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-bottom: 8px;">Importe um arquivo CSV com as colunas: <b>ID,Nome</b></p>
-      <input type="file" id="csvFileInput" accept=".csv">
-      <p id="total-employees" style="margin-top: 8px; font-size: 0.9rem; font-weight: bold;">0 funcionários carregados.</p>
-    </div>
-
-    <div class="card">
-      <h2>2. Iniciar Chamada</h2>
-      <label style="font-size:0.85rem; font-weight: bold;">Escolha a Câmera:</label>
-      <select id="camera-select" style="margin: 6px 0 12px 0;"></select>
-      <button class="btn-main" onclick="enterKioskMode()">Abrir Scanner Contínuo</button>
-    </div>
-
-    <div class="card">
-      <h2>3. Relatórios & Compartilhamento</h2>
-      <p style="font-size: 0.9rem; margin-bottom: 10px;">Presentes confirmados: <b id="count-present">0</b></p>
-      <div class="grid-2">
-        <button class="btn-wa" onclick="shareWhatsApp()">Enviar WhatsApp</button>
-        <button class="btn-excel" onclick="exportCSV()">Baixar Planilha</button>
+    <!-- VISÃO DO ADMINISTRADOR -->
+    <section id="admin-view">
+      
+      <!-- Painel 1: Base de Dados -->
+      <div class="panel" style="margin-bottom: 20px;">
+        <h2>📊 1. Base de Funcionários</h2>
+        <p class="helper-text">Importe a planilha <b>.xlsx</b>. As colunas devem se chamar obrigatoriamente <b>ID</b> e <b>Nome</b>.</p>
+        <input type="file" id="excel-file" accept=".xlsx, .xls">
+        <p id="employee-count-label"><strong>0</strong> funcionários sincronizados na memória local.</p>
       </div>
-      <button class="btn-danger" style="margin-top: 8px; width: 100%;" onclick="clearAttendance()">Limpar Lista de Hoje</button>
 
-      <div style="max-height: 250px; overflow-y: auto; margin-top: 12px;">
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Nome</th><th>Hora</th></tr>
-          </thead>
-          <tbody id="attendance-body"></tbody>
-        </table>
+      <!-- Painel 2: Configuração da Câmera -->
+      <div class="panel" style="margin-bottom: 20px;">
+        <h2>📷 2. Leitor de QR Code</h2>
+        <p class="helper-text">Selecione a câmera desejada (Frontal ou Traseira).</p>
+        <select id="camera-select">
+          <option value="">Carregando câmeras...</option>
+        </select>
+        <button id="btn-start-scanner" class="btn-primary">
+          ▶ Iniciar Modo de Escaneamento
+        </button>
       </div>
-    </div>
-  </div>
 
-  <!-- MODO SCANNER / KIOSK -->
-  <div id="scanner-view">
-    <div id="reader"></div>
+      <!-- Painel 3: Relatórios -->
+      <div class="panel">
+        <h2>📑 3. Lista de Presença de Hoje</h2>
+        <p class="helper-text">Total confirmados: <strong id="present-count-label">0</strong></p>
+        
+        <div class="grid-2">
+          <button id="btn-export-excel" class="btn-excel">Exportar .xlsx</button>
+          <button id="btn-export-wa" class="btn-whatsapp">Enviar WhatsApp</button>
+        </div>
+        
+        <button id="btn-clear-data" class="btn-outline">Zerar Lista (Fim de Expediente)</button>
 
-    <div id="status-card">
-      <div id="status-name">Aproxime o Crachá</div>
-      <div id="status-msg">Aguardando leitura de QR Code...</div>
-    </div>
+        <div class="table-container">
+          <table id="attendance-table">
+            <thead>
+              <tr><th>ID</th><th>Nome</th><th>Hora do Check-in</th></tr>
+            </thead>
+            <tbody id="attendance-tbody">
+              <!-- Renderizado via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    <button class="btn-secondary" onclick="exitKioskMode()">Encerrar / Sair do Modo Scanner (PIN)</button>
-  </div>
+    <!-- VISÃO KIOSK (MODO SCANNER CONTÍNUO) -->
+    <section id="scanner-view">
+      <div id="reader-container"></div>
+      
+      <div id="feedback-card">
+        <div id="feedback-title">Pronto para Ler</div>
+        <div id="feedback-subtitle">Aponte o crachá para a câmera</div>
+      </div>
 
-</div>
+      <button id="btn-exit-scanner" class="btn-outline">
+        🔒 Sair do Modo Leitor (Requer PIN)
+      </button>
+    </section>
 
-<script>
-  // CONFIGURAÇÃO DO PIN DE SEGURANÇA
-  const ADMIN_PIN = "1234";
+  </main>
 
-  let employees = JSON.parse(localStorage.getItem('employees')) || {};
-  let attendance = JSON.parse(localStorage.getItem('attendance')) || [];
-  let html5QrCode = null;
-  let isProcessingScan = false;
+  <script>
+    "use strict"; // Boas práticas: Impede declarações acidentais de variáveis globais
 
-  // Inicialização do sintetizador de áudio
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  function playTone(freq, type, duration) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
-    osc.stop(audioCtx.currentTime + duration);
-  }
+    // Módulo Principal da Aplicação (IIFE para isolar o escopo)
+    (function App() {
+      // Configurações e Estado
+      const CONFIG = {
+        ADMIN_PIN: "1234", // PIN de Segurança da Interface
+        SCAN_COOLDOWN_MS: 2500 // Tempo de tela entre uma leitura e outra
+      };
 
-  function beepSuccess() { playTone(880, 'sine', 0.15); }
-  function beepWarning() { playTone(440, 'triangle', 0.2); setTimeout(() => playTone(440, 'triangle', 0.2), 220); }
-  function beepError() { playTone(220, 'sawtooth', 0.35); }
+      const state = {
+        employees: JSON.parse(localStorage.getItem("app_employees")) || {},
+        attendance: JSON.parse(localStorage.getItem("app_attendance")) || [],
+        html5QrCode: null,
+        isProcessing: false
+      };
 
-  // Listar Câmeras (Frontal e Traseira)
-  Html5Qrcode.getCameras().then(devices => {
-    const select = document.getElementById('camera-select');
-    if (devices && devices.length) {
-      devices.forEach((dev, idx) => {
-        const opt = document.createElement('option');
-        opt.value = dev.id;
-        opt.text = dev.label || `Câmera ${idx + 1}`;
-        select.appendChild(opt);
-      });
-    }
-  }).catch(() => {});
+      // Referências do DOM
+      const dom = {
+        fileInput: document.getElementById('excel-file'),
+        empCount: document.getElementById('employee-count-label'),
+        camSelect: document.getElementById('camera-select'),
+        btnStart: document.getElementById('btn-start-scanner'),
+        btnExit: document.getElementById('btn-exit-scanner'),
+        btnExcel: document.getElementById('btn-export-excel'),
+        btnWa: document.getElementById('btn-export-wa'),
+        btnClear: document.getElementById('btn-clear-data'),
+        tbody: document.getElementById('attendance-tbody'),
+        presCount: document.getElementById('present-count-label'),
+        feedbackCard: document.getElementById('feedback-card'),
+        feedbackTitle: document.getElementById('feedback-title'),
+        feedbackSubtitle: document.getElementById('feedback-subtitle')
+      };
 
-  // Leitura do arquivo CSV de funcionários
-  document.getElementById('csvFileInput').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      const lines = evt.target.result.split(/\r\n|\n/);
-      employees = {};
-      lines.forEach(line => {
-        const parts = line.split(',');
-        if (parts.length >= 2) {
-          const id = parts[0].trim().replace(/"/g, '');
-          const name = parts[1].trim().replace(/"/g, '');
-          if (id && name) employees[id] = name;
+      // --- Módulo de Áudio (Web Audio API) ---
+      const AudioSys = {
+        ctx: new (window.AudioContext || window.webkitAudioContext)(),
+        play: function(freq, type, duration) {
+          if (this.ctx.state === 'suspended') this.ctx.resume();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.value = freq;
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration);
+          osc.stop(this.ctx.currentTime + duration);
+        },
+        success: () => AudioSys.play(900, 'sine', 0.15),
+        warning: () => { AudioSys.play(400, 'triangle', 0.15); setTimeout(() => AudioSys.play(400, 'triangle', 0.15), 200); },
+        error: () => AudioSys.play(200, 'sawtooth', 0.4)
+      };
+
+      // --- Inicialização ---
+      function init() {
+        bindEvents();
+        updateDashboard();
+        loadCameras();
+      }
+
+      function bindEvents() {
+        dom.fileInput.addEventListener('change', handleExcelUpload);
+        dom.btnStart.addEventListener('click', startKioskMode);
+        dom.btnExit.addEventListener('click', exitKioskMode);
+        dom.btnExcel.addEventListener('click', exportToExcel);
+        dom.btnWa.addEventListener('click', shareToWhatsApp);
+        dom.btnClear.addEventListener('click', clearAttendance);
+      }
+
+      // --- Lógica de Leitura de Excel (SheetJS) ---
+      async function handleExcelUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          
+          // Pega a primeira aba da planilha
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Converte para JSON
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          
+          if (jsonData.length === 0) throw new Error("A planilha está vazia.");
+          
+          // Identifica dinamicamente as chaves (ignorando case sensitive)
+          let newEmployees = {};
+          jsonData.forEach(row => {
+            const keys = Object.keys(row);
+            const idKey = keys.find(k => k.toLowerCase() === 'id');
+            const nomeKey = keys.find(k => k.toLowerCase() === 'nome');
+            
+            if (idKey && nomeKey && row[idKey]) {
+              const id = String(row[idKey]).trim();
+              const nome = String(row[nomeKey]).trim();
+              newEmployees[id] = nome;
+            }
+          });
+
+          if (Object.keys(newEmployees).length === 0) {
+            throw new Error("Não encontramos as colunas 'ID' e 'Nome' na planilha.");
+          }
+
+          state.employees = newEmployees;
+          localStorage.setItem("app_employees", JSON.stringify(state.employees));
+          
+          alert(`✅ Importação concluída! ${Object.keys(state.employees).length} funcionários carregados.`);
+          updateDashboard();
+        } catch (error) {
+          console.error("Erro na importação:", error);
+          alert(`❌ Erro ao ler a planilha: ${error.message}`);
+        } finally {
+          dom.fileInput.value = ""; // Reseta o input
         }
-      });
-      localStorage.setItem('employees', JSON.stringify(employees));
-      updateEmployeeCount();
-      alert("Lista importada com sucesso!");
-    };
-    reader.readAsText(file);
-  });
-
-  function updateEmployeeCount() {
-    const count = Object.keys(employees).length;
-    document.getElementById('total-employees').innerText = `${count} funcionários cadastrados.`;
-  }
-
-  // Entrada no Modo Scanner
-  function enterKioskMode() {
-    document.body.classList.add('kiosk');
-    const selectedCameraId = document.getElementById('camera-select').value;
-    html5QrCode = new Html5Qrcode("reader");
-
-    html5QrCode.start(
-      selectedCameraId,
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      onScanSuccess,
-      () => {}
-    ).catch(err => {
-      alert("Erro ao iniciar câmera: " + err);
-      exitKioskMode(true);
-    });
-  }
-
-  // Saída protegida por PIN
-  function exitKioskMode(force = false) {
-    if (!force) {
-      const pin = prompt("Digite o PIN para sair do modo scanner:");
-      if (pin !== ADMIN_PIN) {
-        alert("PIN incorreto!");
-        return;
       }
-    }
-    if (html5QrCode) {
-      html5QrCode.stop().then(() => {
-        document.body.classList.remove('kiosk');
-        updateAttendanceTable();
-      });
-    } else {
-      document.body.classList.remove('kiosk');
-      updateAttendanceTable();
-    }
-  }
 
-  // Tratamento da Leitura
-  function onScanSuccess(decodedText) {
-    if (isProcessingScan) return;
-    isProcessingScan = true;
-
-    const idScanned = decodedText.trim();
-    const statusCard = document.getElementById('status-card');
-    const statusName = document.getElementById('status-name');
-    const statusMsg = document.getElementById('status-msg');
-
-    const employeeName = employees[idScanned];
-
-    if (!employeeName) {
-      // Não cadastrado
-      beepError();
-      statusCard.className = "error";
-      statusName.innerText = "Não Encontrado";
-      statusMsg.innerText = `ID ${idScanned} fora da lista`;
-    } else {
-      const alreadyChecked = attendance.find(item => item.id === idScanned);
-      if (alreadyChecked) {
-        // Já registrado
-        beepWarning();
-        statusCard.className = "warning";
-        statusName.innerText = employeeName;
-        statusMsg.innerText = `Presença já marcada às ${alreadyChecked.time}`;
-      } else {
-        // Sucesso
-        beepSuccess();
-        const timeNow = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        attendance.unshift({ id: idScanned, name: employeeName, time: timeNow });
-        localStorage.setItem('attendance', JSON.stringify(attendance));
-
-        statusCard.className = "success";
-        statusName.innerText = employeeName;
-        statusMsg.innerText = `Presença confirmada às ${timeNow}!`;
+      // --- Lógica do Scanner e UI ---
+      function loadCameras() {
+        // Aguarda a lib carregar via CDN
+        window.addEventListener('load', () => {
+          if (typeof Html5Qrcode === "undefined") return;
+          Html5Qrcode.getCameras().then(devices => {
+            dom.camSelect.innerHTML = "";
+            devices.forEach((dev, idx) => {
+              const option = document.createElement("option");
+              option.value = dev.id;
+              option.textContent = dev.label || `Câmera ${idx + 1}`;
+              dom.camSelect.appendChild(option);
+            });
+          }).catch(err => {
+            dom.camSelect.innerHTML = "<option value=''>Erro ao acessar câmera</option>";
+          });
+        });
       }
-    }
 
-    // Intervalo para permitir nova leitura
-    setTimeout(() => {
-      statusCard.className = "";
-      statusName.innerText = "Aproxime o Crachá";
-      statusMsg.innerText = "Aguardando leitura de QR Code...";
-      isProcessingScan = false;
-    }, 2500);
-  }
+      function startKioskMode() {
+        const camId = dom.camSelect.value;
+        if (!camId) {
+          alert("Por favor, permita o acesso à câmera e selecione uma opção.");
+          return;
+        }
 
-  function updateAttendanceTable() {
-    const tbody = document.getElementById('attendance-body');
-    tbody.innerHTML = '';
-    attendance.forEach(row => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${row.id}</td><td>${row.name}</td><td>${row.time}</td>`;
-      tbody.appendChild(tr);
-    });
-    document.getElementById('count-present').innerText = attendance.length;
-  }
+        document.body.classList.add("kiosk-active");
+        state.html5QrCode = new Html5Qrcode("reader-container");
+        
+        state.html5QrCode.start(
+          camId, 
+          { fps: 10, qrbox: { width: 250, height: 250 } }, 
+          processScan, 
+          () => {} // Ignora erros de frame vazio
+        ).catch(err => {
+          alert("Falha ao iniciar o scanner corporativo: " + err);
+          document.body.classList.remove("kiosk-active");
+        });
+      }
 
-  // Compartilhar WhatsApp formatado
-  function shareWhatsApp() {
-    if (attendance.length === 0) {
-      alert("Nenhuma presença registrada ainda.");
-      return;
-    }
-    const today = new Date().toLocaleDateString('pt-BR');
-    let text = `*Lista de Presença - ${today}*\n`;
-    text += `*Total Presentes:* ${attendance.length}\n\n`;
-    attendance.forEach(item => {
-      text += `• ${item.name} (ID: ${item.id}) - ${item.time}\n`;
-    });
+      function exitKioskMode() {
+        const pin = prompt("🔐 Área Restrita. Digite o PIN da Portaria:");
+        if (pin !== CONFIG.ADMIN_PIN) {
+          if (pin !== null) alert("PIN Incorreto!");
+          return;
+        }
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
-  }
+        if (state.html5QrCode) {
+          state.html5QrCode.stop().then(() => {
+            document.body.classList.remove("kiosk-active");
+            updateDashboard();
+          }).catch(err => console.error("Erro ao parar scanner", err));
+        }
+      }
 
-  // Exportar Planilha Excel (.CSV com BOM UTF-8)
-  function exportCSV() {
-    if (attendance.length === 0) {
-      alert("Nenhuma presença para exportar.");
-      return;
-    }
-    let csvContent = "\uFEFFID,Nome,Horário\n";
-    attendance.forEach(row => {
-      csvContent += `"${row.id}","${row.name}","${row.time}"\n`;
-    });
+      function processScan(decodedText) {
+        if (state.isProcessing) return;
+        state.isProcessing = true;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `presenca_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
+        const idLido = String(decodedText).trim();
+        const employeeName = state.employees[idLido];
+        
+        resetFeedbackUI();
 
-  function clearAttendance() {
-    if (confirm("Deseja realmente zerar a lista de presenças de hoje?")) {
-      attendance = [];
-      localStorage.removeItem('attendance');
-      updateAttendanceTable();
-    }
-  }
+        if (!employeeName) {
+          // Crachá não pertence à empresa / não listado
+          AudioSys.error();
+          setFeedbackUI("error", "Não Encontrado", `ID [${idLido}] não consta no sistema.`);
+        } else {
+          const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
+          
+          if (hasCheckedIn) {
+            // Tentativa de marcação dupla
+            AudioSys.warning();
+            setFeedbackUI("warning", employeeName, "Atenção: Presença já registrada hoje.");
+          } else {
+            // Marcação com Sucesso
+            AudioSys.success();
+            const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            // Adiciona no início do array
+            state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
+            localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
+            
+            setFeedbackUI("success", employeeName, `Check-in confirmado às ${timeStr}`);
+          }
+        }
 
-  updateEmployeeCount();
-  updateAttendanceTable();
-</script>
+        // Libera o scanner após o tempo configurado
+        setTimeout(() => {
+          resetFeedbackUI();
+          state.isProcessing = false;
+        }, CONFIG.SCAN_COOLDOWN_MS);
+      }
 
+      function setFeedbackUI(type, title, subtitle) {
+        dom.feedbackCard.className = type;
+        dom.feedbackTitle.textContent = title; // Seguro contra XSS
+        dom.feedbackSubtitle.textContent = subtitle;
+      }
+
+      function resetFeedbackUI() {
+        dom.feedbackCard.className = "";
+        dom.feedbackTitle.textContent = "Pronto para Ler";
+        dom.feedbackSubtitle.textContent = "Aponte o crachá para a câmera";
+      }
+
+      // --- UI Admin e Exportação ---
+      function updateDashboard() {
+        // Atualiza contadores
+        dom.empCount.innerHTML = `<strong>${Object.keys(state.employees).length}</strong> funcionários na memória local.`;
+        dom.presCount.textContent = state.attendance.length;
+
+        // Reconstrói a tabela de forma segura (Prevenção XSS via DOM API)
+        dom.tbody.innerHTML = "";
+        state.attendance.forEach(row => {
+          const tr = document.createElement("tr");
+          
+          const tdId = document.createElement("td");
+          tdId.textContent = row.id;
+          
+          const tdNome = document.createElement("td");
+          tdNome.textContent = row.nome;
+          
+          const tdHora = document.createElement("td");
+          tdHora.textContent = row.hora;
+          
+          tr.appendChild(tdId);
+          tr.appendChild(tdNome);
+          tr.appendChild(tdHora);
+          dom.tbody.appendChild(tr);
+        });
+      }
+
+      function exportToExcel() {
+        if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
+        
+        // Criação estruturada do Excel usando SheetJS
+        const worksheet = XLSX.utils.json_to_sheet(state.attendance);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
+        
+        // Formata nome do arquivo com a data de hoje
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
+      }
+
+      function shareToWhatsApp() {
+        if (state.attendance.length === 0) return alert("Lista vazia.");
+        
+        const dateStr = new Date().toLocaleDateString('pt-BR');
+        let text = `*Lista de Presença - ${dateStr}*\n`;
+        text += `*Total Presentes:* ${state.attendance.length}\n\n`;
+        
+        state.attendance.forEach(rec => {
+          text += `✅ ${rec.nome} - ${rec.hora}\n`;
+        });
+
+        const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+      }
+
+      function clearAttendance() {
+        if (state.attendance.length === 0) return;
+        if (confirm("⚠️ Tem certeza que deseja limpar a lista de presença de hoje? Exporte os dados antes de limpar!")) {
+          state.attendance = [];
+          localStorage.removeItem("app_attendance");
+          updateDashboard();
+        }
+      }
+
+      // Inicia a aplicação
+      init();
+    })();
+  </script>
 </body>
 </html>
