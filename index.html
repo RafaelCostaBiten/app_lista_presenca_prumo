@@ -67,6 +67,7 @@
     body.kiosk-active #scanner-view { display: flex; }
     
     #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
+    #reader-container.mirror video { transform: scaleX(-1) !important; }
     
     /* Efeito de Flash na tela inteira */
     #flash-overlay {
@@ -184,7 +185,8 @@
         employees: JSON.parse(localStorage.getItem("app_employees")) || {},
         attendance: JSON.parse(localStorage.getItem("app_attendance")) || [],
         html5QrCode: null,
-        isProcessing: false
+        isProcessing: false,
+        isFrontCamera: false /* NOVO: Rastreador de câmera atual */
       };
 
       const dom = {
@@ -302,15 +304,25 @@
           return;
         }
 
+        // Verifica se é câmera frontal para aplicar espelhamento automático e desativar o flash físico
+        const camLabel = dom.camSelect.options[dom.camSelect.selectedIndex].text.toLowerCase();
+        state.isFrontCamera = camLabel.includes("front") || camLabel.includes("frontal") || camLabel.includes("user");
+        
+        const reader = document.getElementById("reader-container");
+        if (state.isFrontCamera) {
+          reader.classList.add("mirror");
+        } else {
+          reader.classList.remove("mirror");
+        }
+
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
-        // Câmera sem limitador (tela cheia) e focada 100% em QR Codes para máxima performance
         const scannerConfig = {
           fps: 10,
           formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
           videoConstraints: {
-            deviceId: { exact: camId }, // <-- ISSO GARANTE A CÂMERA ESCOLHIDA
+            deviceId: { exact: camId },
             width: { ideal: 1280 },
             height: { ideal: 720 },
             advanced: [{ focusMode: "continuous" }] 
@@ -351,6 +363,7 @@
         const employeeName = state.employees[idLido];
         
         resetFeedbackUI();
+        blinkPhysicalFlash(); // Aciona o flash da câmera traseira
 
         if (!employeeName) {
           AudioSys.error();
@@ -372,15 +385,43 @@
           }
         }
 
+        // Libera o scanner após o tempo configurado
         setTimeout(() => {
           resetFeedbackUI();
           state.isProcessing = false;
         }, CONFIG.SCAN_COOLDOWN_MS);
       }
 
+      // NOVO: Função para piscar o LED físico da câmera
+      function blinkPhysicalFlash() {
+        // Só tenta piscar se for câmera traseira e o objeto existir
+        if (state.isFrontCamera || !state.html5QrCode) return;
+        
+        if (typeof state.html5QrCode.applyVideoConstraints === 'function') {
+          // Liga o LED mantendo o foco contínuo
+          state.html5QrCode.applyVideoConstraints({ advanced: [{ focusMode: "continuous", torch: true }] })
+            .then(() => {
+              // Desliga o LED após 300 milissegundos
+              setTimeout(() => {
+                state.html5QrCode.applyVideoConstraints({ advanced: [{ focusMode: "continuous", torch: false }] })
+                  .catch(() => {}); 
+              }, 300);
+            })
+            .catch(err => {
+              console.warn("Flash físico não suportado pelo navegador ou dispositivo.", err);
+            });
+        }
+      }
+
       function setFeedbackUI(type, title, subtitle) {
         // Ativa o Flash na tela inteira
         dom.flashOverlay.className = `flash-${type}`;
+        
+        // Faz o flash sumir rapidamente após 300 milissegundos (Efeito de câmera)
+        setTimeout(() => { 
+          dom.flashOverlay.className = ""; 
+        }, 300);
+
         // Mostra o Popup centralizado
         dom.feedbackCard.className = `${type} show`;
         
@@ -389,7 +430,6 @@
       }
 
       function resetFeedbackUI() {
-        dom.flashOverlay.className = "";
         dom.feedbackCard.className = "";
       }
 
