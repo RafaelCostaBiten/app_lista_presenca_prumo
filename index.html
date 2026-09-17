@@ -6,10 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Sistema de Check-in Corporativo</title>
   
-  <!-- Bibliotecas Seguras via CDN (Content Delivery Network) -->
-  <!-- Leitor de QR Code -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <!-- Manipulador de Arquivos Excel (SheetJS) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
   <style>
@@ -17,7 +14,7 @@
       --color-primary: #0f172a;
       --color-secondary: #3b82f6;
       --color-success: #16a34a;
-      --color-warning: #d97706;
+      --color-warning: #f97316; /* Laranja mais vibrante para dar destaque ao brilho */
       --color-danger: #dc2626;
       --color-bg: #f1f5f9;
       --color-surface: #ffffff;
@@ -36,7 +33,6 @@
     .panel { background: var(--color-surface); padding: 24px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid #e2e8f0; }
     
     h2 { font-size: 1.25rem; color: var(--color-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-    
     p.helper-text { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
 
     button { padding: 12px 16px; border: none; border-radius: var(--border-radius); font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; }
@@ -69,17 +65,17 @@
     #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
     #reader-container.mirror video { transform: scaleX(-1) !important; }
     
-    /* Efeito de Flash na tela inteira */
+    /* Clarão da tela inteira (Super intenso para refletir iluminação) */
     #flash-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       pointer-events: none; z-index: 998;
-      opacity: 0; transition: opacity 0.15s ease-out;
+      opacity: 0; transition: opacity 0.05s ease-out; /* Acende instantaneamente */
     }
-    #flash-overlay.flash-success { background-color: rgba(22, 163, 74, 0.4); opacity: 1; }
-    #flash-overlay.flash-warning { background-color: rgba(217, 119, 6, 0.4); opacity: 1; }
-    #flash-overlay.flash-error { background-color: rgba(220, 38, 38, 0.4); opacity: 1; }
+    #flash-overlay.flash-success { background-color: var(--color-success); opacity: 1; }
+    #flash-overlay.flash-warning { background-color: var(--color-warning); opacity: 1; }
+    #flash-overlay.flash-error { background-color: var(--color-danger); opacity: 1; }
 
-    /* Overlay Centralizado de Feedback */
+    /* Overlay Centralizado de Feedback (Tempo Reduzido) */
     #feedback-card {
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%) scale(0.9);
@@ -89,12 +85,12 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       opacity: 0; visibility: hidden;
       display: flex; flex-direction: column; justify-content: center;
-      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     
     #feedback-card.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
     #feedback-card.success { background: rgba(22, 163, 74, 0.95); }
-    #feedback-card.warning { background: rgba(217, 119, 6, 0.95); }
+    #feedback-card.warning { background: rgba(249, 115, 22, 0.95); }
     #feedback-card.error { background: rgba(220, 38, 38, 0.95); }
     
     #feedback-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; line-height: 1.1; }
@@ -103,15 +99,11 @@
 </head>
 <body>
 
-  <!-- Overlay para o efeito de flash -->
   <div id="flash-overlay"></div>
 
   <main class="app-container">
-
-    <!-- VISÃO DO ADMINISTRADOR -->
     <section id="admin-view">
       
-      <!-- Painel 1: Base de Dados -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📊 1. Base de Funcionários</h2>
         <p class="helper-text">Importe a planilha <b>.xlsx</b>. As colunas devem se chamar obrigatoriamente <b>ID</b> e <b>Nome</b>.</p>
@@ -119,7 +111,6 @@
         <p id="employee-count-label"><strong>0</strong> funcionários sincronizados na memória local.</p>
       </div>
 
-      <!-- Painel 2: Configuração da Câmera -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📷 2. Leitor de QR Code</h2>
         <p class="helper-text">Selecione a câmera desejada.</p>
@@ -131,7 +122,6 @@
         </button>
       </div>
 
-      <!-- Painel 3: Relatórios -->
       <div class="panel">
         <h2>📑 3. Lista de Presença de Hoje</h2>
         <p class="helper-text">Total confirmados: <strong id="present-count-label">0</strong></p>
@@ -156,7 +146,6 @@
       </div>
     </section>
 
-    <!-- VISÃO KIOSK (MODO SCANNER CONTÍNUO) -->
     <section id="scanner-view">
       <div id="reader-container"></div>
       
@@ -178,7 +167,7 @@
     (function App() {
       const CONFIG = {
         ADMIN_PIN: "1234",
-        SCAN_COOLDOWN_MS: 2000 // Tempo suficiente para ler e ver a confirmação
+        SCAN_COOLDOWN_MS: 1200 // TEMPO REDUZIDO PARA FILAS RÁPIDAS (1.2 Segundos)
       };
 
       const state = {
@@ -186,7 +175,7 @@
         attendance: JSON.parse(localStorage.getItem("app_attendance")) || [],
         html5QrCode: null,
         isProcessing: false,
-        isFrontCamera: false /* NOVO: Rastreador de câmera atual */
+        isFrontCamera: false
       };
 
       const dom = {
@@ -220,9 +209,16 @@
           gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration);
           osc.stop(this.ctx.currentTime + duration);
         },
-        success: () => AudioSys.play(900, 'sine', 0.15),
-        warning: () => { AudioSys.play(400, 'triangle', 0.15); setTimeout(() => AudioSys.play(400, 'triangle', 0.15), 200); },
-        error: () => AudioSys.play(200, 'sawtooth', 0.4)
+        success: () => AudioSys.play(900, 'sine', 0.15), // Bip limpo e rápido
+        warning: () => { 
+          AudioSys.play(400, 'triangle', 0.15); 
+          setTimeout(() => AudioSys.play(400, 'triangle', 0.15), 180); 
+        },
+        // NOVO SOM DE ERRO: Dois tons graves simulando uma "campainha de erro"
+        error: () => { 
+          AudioSys.play(150, 'sawtooth', 0.2);
+          setTimeout(() => AudioSys.play(100, 'sawtooth', 0.4), 200); 
+        }
       };
 
       function init() {
@@ -300,11 +296,10 @@
       function startKioskMode() {
         const camId = dom.camSelect.value;
         if (!camId) {
-          alert("Por favor, permita o acesso à câmera e selecione uma opção.");
+          alert("Por favor, selecione uma câmera.");
           return;
         }
 
-        // Verifica se é câmera frontal para aplicar espelhamento automático e desativar o flash físico
         const camLabel = dom.camSelect.options[dom.camSelect.selectedIndex].text.toLowerCase();
         state.isFrontCamera = camLabel.includes("front") || camLabel.includes("frontal") || camLabel.includes("user");
         
@@ -318,8 +313,9 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
+        // Alta performance: FPS 15 e motor restrito à família QR CODE
         const scannerConfig = {
-          fps: 10,
+          fps: 15, 
           formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
           videoConstraints: {
             deviceId: { exact: camId },
@@ -333,15 +329,15 @@
           camId, 
           scannerConfig, 
           processScan, 
-          () => {} // Ignora frames vazios
+          () => {} 
         ).catch(err => {
-          alert("Falha ao iniciar o scanner corporativo: " + err);
+          alert("Falha ao iniciar o scanner: " + err);
           document.body.classList.remove("kiosk-active");
         });
       }
 
       function exitKioskMode() {
-        const pin = prompt("🔐 Área Restrita. Digite o PIN da Portaria:");
+        const pin = prompt("🔐 Área Restrita. Digite o PIN:");
         if (pin !== CONFIG.ADMIN_PIN) {
           if (pin !== null) alert("PIN Incorreto!");
           return;
@@ -357,23 +353,22 @@
 
       function processScan(decodedText) {
         if (state.isProcessing) return;
-        state.isProcessing = true;
+        state.isProcessing = true; // Bloqueia múltiplas leituras indesejadas no mesmo segundo
 
         const idLido = String(decodedText).trim();
         const employeeName = state.employees[idLido];
         
         resetFeedbackUI();
-        blinkPhysicalFlash(); // Aciona o flash da câmera traseira
 
         if (!employeeName) {
           AudioSys.error();
-          setFeedbackUI("error", "Não Encontrado", `O ID [${idLido}] não consta na planilha carregada.`);
+          setFeedbackUI("error", "Não Encontrado", `[${idLido}] ausente da base.`);
         } else {
           const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
           
           if (hasCheckedIn) {
             AudioSys.warning();
-            setFeedbackUI("warning", employeeName, "Atenção: Presença já registrada hoje.");
+            setFeedbackUI("warning", employeeName, "Presença já confirmada.");
           } else {
             AudioSys.success();
             const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -381,50 +376,28 @@
             state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
             localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
             
-            setFeedbackUI("success", employeeName, `Check-in confirmado às ${timeStr}`);
+            setFeedbackUI("success", employeeName, `Confirmado: ${timeStr}`);
           }
         }
 
-        // Libera o scanner após o tempo configurado
+        // Libera a câmera absurdamente mais rápido para a fila fluir
         setTimeout(() => {
           resetFeedbackUI();
           state.isProcessing = false;
         }, CONFIG.SCAN_COOLDOWN_MS);
       }
 
-      // NOVO: Função para piscar o LED físico da câmera
-      function blinkPhysicalFlash() {
-        // Só tenta piscar se for câmera traseira e o objeto existir
-        if (state.isFrontCamera || !state.html5QrCode) return;
-        
-        if (typeof state.html5QrCode.applyVideoConstraints === 'function') {
-          // Liga o LED mantendo o foco contínuo
-          state.html5QrCode.applyVideoConstraints({ advanced: [{ focusMode: "continuous", torch: true }] })
-            .then(() => {
-              // Desliga o LED após 300 milissegundos
-              setTimeout(() => {
-                state.html5QrCode.applyVideoConstraints({ advanced: [{ focusMode: "continuous", torch: false }] })
-                  .catch(() => {}); 
-              }, 300);
-            })
-            .catch(err => {
-              console.warn("Flash físico não suportado pelo navegador ou dispositivo.", err);
-            });
-        }
-      }
-
       function setFeedbackUI(type, title, subtitle) {
-        // Ativa o Flash na tela inteira
+        // Clarão sólido cobrindo tudo!
         dom.flashOverlay.className = `flash-${type}`;
         
-        // Faz o flash sumir rapidamente após 300 milissegundos (Efeito de câmera)
+        // O clarão dura apenas 200ms para criar a sensação de "Flash de Luz"
         setTimeout(() => { 
           dom.flashOverlay.className = ""; 
-        }, 300);
+        }, 200);
 
-        // Mostra o Popup centralizado
+        // O Popup sobe na tela e fica pelo tempo de Cooldown configurado
         dom.feedbackCard.className = `${type} show`;
-        
         dom.feedbackTitle.textContent = title;
         dom.feedbackSubtitle.textContent = subtitle;
       }
@@ -477,7 +450,7 @@
 
       function clearAttendance() {
         if (state.attendance.length === 0) return;
-        if (confirm("⚠️ Tem certeza que deseja limpar a lista de presença de hoje? Exporte os dados antes de limpar!")) {
+        if (confirm("⚠️ Tem certeza que deseja limpar a lista de presença de hoje?")) {
           state.attendance = [];
           localStorage.removeItem("app_attendance");
           updateDashboard();
