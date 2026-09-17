@@ -288,6 +288,7 @@
         });
       }
 
+      // NOVA CONFIGURAÇÃO DA CÂMERA (Sem limite e com auto-foco forçado)
       function startKioskMode() {
         const camId = dom.camSelect.value;
         if (!camId) {
@@ -298,9 +299,22 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
+        // --- NOVAS CONFIGURAÇÕES DE CÂMERA ---
+        const scannerConfig = {
+          fps: 15, // Aumentado para 15 quadros/segundo para capturar mais rápido
+          // A propriedade 'qrbox' foi removida. Agora ele lê a tela inteira!
+          
+          // Força o navegador a pedir melhor resolução e foco contínuo ao celular
+          videoConstraints: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            advanced: [{ focusMode: "continuous" }] 
+          }
+        };
+        
         state.html5QrCode.start(
           camId, 
-          { fps: 10, qrbox: { width: 250, height: 250 } }, 
+          scannerConfig, 
           processScan, 
           () => {} // Ignora erros de frame vazio
         ).catch(err => {
