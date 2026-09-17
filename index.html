@@ -263,23 +263,26 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
-        // Calcula um tamanho responsivo para o alvo (75% da largura da tela do celular)
+        // 1. Reduz a área para cerca de 1/3 do tamanho anterior
         const screenWidth = window.innerWidth;
-        const boxSize = Math.min(Math.floor(screenWidth * 0.75), 400);
+        const boxSize = Math.min(Math.floor(screenWidth * 0.30), 200);
 
         const scannerConfig = {
-          fps: 10, // 10 fps dá mais tempo para o processador achar códigos pequenos
-          qrbox: { width: boxSize, height: boxSize }, // Diz ao algoritmo exatamente onde procurar
+          fps: 5, // 2. Menos frames por segundo = mais tempo de processamento por frame (aumenta a precisão)
+          qrbox: { width: boxSize, height: boxSize }, 
+          
+          // 3. O SEGREDO DA PRECISÃO: Força o algoritmo a procurar SÓ QR Code (Ignora código de barras)
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          
           videoConstraints: {
             facingMode: "user", 
-            width: { ideal: 1280 }, // 720p é muito mais rápido de processar que 1080p
-            height: { ideal: 720 }
-            // Removido o focusMode, pois em câmeras frontais ele pode causar conflitos nativos
+            width: { ideal: 1280, min: 720 }, 
+            height: { ideal: 720, min: 480 }
           }
         };
         
         state.html5QrCode.start(
-          { facingMode: "user" }, // Inicializa com a lente frontal
+          { facingMode: "user" }, // Lente frontal
           scannerConfig, 
           processScan, 
           () => {} 
