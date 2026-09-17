@@ -310,6 +310,7 @@
           fps: 10,
           formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
           videoConstraints: {
+            deviceId: { exact: camId }, // <-- ISSO GARANTE A CÂMERA ESCOLHIDA
             width: { ideal: 1280 },
             height: { ideal: 720 },
             advanced: [{ focusMode: "continuous" }] 
