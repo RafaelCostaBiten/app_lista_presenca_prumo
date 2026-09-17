@@ -263,13 +263,18 @@
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
+        // Calcula um tamanho responsivo para o alvo (75% da largura da tela do celular)
+        const screenWidth = window.innerWidth;
+        const boxSize = Math.min(Math.floor(screenWidth * 0.75), 400);
+
         const scannerConfig = {
-          fps: 15,
+          fps: 10, // 10 fps dá mais tempo para o processador achar códigos pequenos
+          qrbox: { width: boxSize, height: boxSize }, // Diz ao algoritmo exatamente onde procurar
           videoConstraints: {
-            facingMode: "user", // Força estritamente a câmera frontal
-            width: { ideal: 1920 }, // Força resolução máxima para ler melhor de longe
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: "continuous" }] 
+            facingMode: "user", 
+            width: { ideal: 1280 }, // 720p é muito mais rápido de processar que 1080p
+            height: { ideal: 720 }
+            // Removido o focusMode, pois em câmeras frontais ele pode causar conflitos nativos
           }
         };
         
