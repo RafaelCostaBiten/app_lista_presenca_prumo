@@ -6,15 +6,17 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Sistema de Check-in Corporativo</title>
   
+  <!-- Bibliotecas Seguras via CDN -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 
   <style>
+    /* Arquitetura CSS Baseada em Variáveis e Flexbox */
     :root {
       --color-primary: #0f172a;
       --color-secondary: #3b82f6;
       --color-success: #16a34a;
-      --color-warning: #f97316; /* Laranja mais vibrante para dar destaque ao brilho */
+      --color-warning: #d97706;
       --color-danger: #dc2626;
       --color-bg: #f1f5f9;
       --color-surface: #ffffff;
@@ -33,6 +35,7 @@
     .panel { background: var(--color-surface); padding: 24px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid #e2e8f0; }
     
     h2 { font-size: 1.25rem; color: var(--color-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    
     p.helper-text { font-size: 0.85rem; color: #64748b; margin-bottom: 16px; }
 
     button { padding: 12px 16px; border: none; border-radius: var(--border-radius); font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; }
@@ -58,52 +61,46 @@
     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
     th { background: #f8fafc; font-weight: 600; color: var(--color-primary); position: sticky; top: 0; }
 
-    #scanner-view { display: none; flex-direction: column; gap: 16px; }
+    #scanner-view { display: none; position: relative; width: 100%; max-width: 600px; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
+    body.kiosk-active { padding: 0; background: #000; overflow: hidden; }
+    body.kiosk-active .app-container { max-width: 100%; height: 100%; justify-content: center; }
     body.kiosk-active #admin-view { display: none; }
     body.kiosk-active #scanner-view { display: flex; }
     
-    #reader-container { width: 100%; border-radius: var(--border-radius); overflow: hidden; background: #000; box-shadow: var(--shadow-md); }
-    #reader-container.mirror video { transform: scaleX(-1) !important; }
+    #reader-container { width: 100%; height: 100%; background: #000; }
+    #reader-container video { object-fit: cover !important; }
     
-    /* Clarão da tela inteira (Super intenso para refletir iluminação) */
-    #flash-overlay {
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      pointer-events: none; z-index: 998;
-      opacity: 0; transition: opacity 0.05s ease-out; /* Acende instantaneamente */
-    }
-    #flash-overlay.flash-success { background-color: var(--color-success); opacity: 1; }
-    #flash-overlay.flash-warning { background-color: var(--color-warning); opacity: 1; }
-    #flash-overlay.flash-error { background-color: var(--color-danger); opacity: 1; }
-
-    /* Overlay Centralizado de Feedback (Tempo Reduzido) */
-    #feedback-card {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(0.9);
-      width: 85%; max-width: 400px;
-      z-index: 999; padding: 30px 20px;
-      border-radius: 16px; text-align: center; color: white;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      opacity: 0; visibility: hidden;
-      display: flex; flex-direction: column; justify-content: center;
-      transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
+    /* Efeito de Espelho Inteligente */
+    .mirror-video video { transform: scaleX(-1) !important; }
     
-    #feedback-card.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+    /* Feedback Central Flutuante */
+    #feedback-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); z-index: 100; padding: 20px; border-radius: var(--border-radius); text-align: center; color: white; min-width: 280px; background: rgba(15, 23, 42, 0.9); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; box-shadow: 0 10px 25px rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+    #feedback-card.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     #feedback-card.success { background: rgba(22, 163, 74, 0.95); }
-    #feedback-card.warning { background: rgba(249, 115, 22, 0.95); }
+    #feedback-card.warning { background: rgba(217, 119, 6, 0.95); }
     #feedback-card.error { background: rgba(220, 38, 38, 0.95); }
     
-    #feedback-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; line-height: 1.1; }
-    #feedback-subtitle { font-size: 1.1rem; opacity: 0.9; }
+    #feedback-title { font-size: 1.4rem; font-weight: bold; margin-bottom: 4px; }
+    #feedback-subtitle { font-size: 0.95rem; opacity: 0.9; }
+
+    /* Clarão (Flash) na tela inteira */
+    #flash-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 9999; }
+    #flash-overlay.flash-success { background: rgba(22, 163, 74, 0.7); opacity: 1; }
+    #flash-overlay.flash-warning { background: rgba(217, 119, 6, 0.7); opacity: 1; }
+    #flash-overlay.flash-error { background: rgba(220, 38, 38, 0.7); opacity: 1; }
+
+    #btn-exit-scanner { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: auto; background: rgba(255,255,255,0.9); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); color: #000; border: none; }
   </style>
 </head>
 <body>
 
+  <!-- Overlay para o flash de leitura -->
   <div id="flash-overlay"></div>
 
   <main class="app-container">
+    <!-- VISÃO DO ADMINISTRADOR -->
     <section id="admin-view">
-      
+      <!-- Painel 1: Base de Dados -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📊 1. Base de Funcionários</h2>
         <p class="helper-text">Importe a planilha <b>.xlsx</b>. As colunas devem se chamar obrigatoriamente <b>ID</b> e <b>Nome</b>.</p>
@@ -111,9 +108,10 @@
         <p id="employee-count-label"><strong>0</strong> funcionários sincronizados na memória local.</p>
       </div>
 
+      <!-- Painel 2: Configuração da Câmera -->
       <div class="panel" style="margin-bottom: 20px;">
         <h2>📷 2. Leitor de QR Code</h2>
-        <p class="helper-text">Selecione a câmera desejada.</p>
+        <p class="helper-text">Selecione a câmera desejada (Traseira recomendada para varredura).</p>
         <select id="camera-select">
           <option value="">Carregando câmeras...</option>
         </select>
@@ -122,6 +120,7 @@
         </button>
       </div>
 
+      <!-- Painel 3: Relatórios -->
       <div class="panel">
         <h2>📑 3. Lista de Presença de Hoje</h2>
         <p class="helper-text">Total confirmados: <strong id="present-count-label">0</strong></p>
@@ -136,7 +135,7 @@
         <div class="table-container">
           <table id="attendance-table">
             <thead>
-              <tr><th>ID</th><th>Nome</th><th>Hora</th></tr>
+              <tr><th>ID</th><th>Nome</th><th>Hora do Check-in</th></tr>
             </thead>
             <tbody id="attendance-tbody">
               <!-- Renderizado via JS -->
@@ -146,16 +145,18 @@
       </div>
     </section>
 
+    <!-- VISÃO KIOSK (MODO SCANNER CONTÍNUO) -->
     <section id="scanner-view">
       <div id="reader-container"></div>
       
+      <!-- Popup Central -->
       <div id="feedback-card">
         <div id="feedback-title"></div>
         <div id="feedback-subtitle"></div>
       </div>
 
       <button id="btn-exit-scanner" class="btn-outline">
-        🔒 Sair do Modo Leitor (Requer PIN)
+        🔒 Encerrar Scanner
       </button>
     </section>
 
@@ -165,17 +166,17 @@
     "use strict";
 
     (function App() {
+      // Configurações do Sistema
       const CONFIG = {
-        ADMIN_PIN: "1234",
-        SCAN_COOLDOWN_MS: 1200 // TEMPO REDUZIDO PARA FILAS RÁPIDAS (1.2 Segundos)
+        ADMIN_PIN: "1234", 
+        SCAN_COOLDOWN_MS: 1200 // Ritmo acelerado para filas
       };
 
       const state = {
         employees: JSON.parse(localStorage.getItem("app_employees")) || {},
         attendance: JSON.parse(localStorage.getItem("app_attendance")) || [],
         html5QrCode: null,
-        isProcessing: false,
-        isFrontCamera: false
+        isProcessing: false
       };
 
       const dom = {
@@ -197,7 +198,7 @@
 
       const AudioSys = {
         ctx: new (window.AudioContext || window.webkitAudioContext)(),
-        play: function(freq, type, duration) {
+        playTone: function(freq, type, duration, startTimeOffset = 0) {
           if (this.ctx.state === 'suspended') this.ctx.resume();
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
@@ -205,19 +206,32 @@
           osc.frequency.value = freq;
           osc.connect(gain);
           gain.connect(this.ctx.destination);
-          osc.start();
-          gain.gain.exponentialRampToValueAtTime(0.00001, this.ctx.currentTime + duration);
-          osc.stop(this.ctx.currentTime + duration);
+          
+          const startTime = this.ctx.currentTime + startTimeOffset;
+          osc.start(startTime);
+          gain.gain.setValueAtTime(1, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.00001, startTime + duration);
+          osc.stop(startTime + duration);
         },
-        success: () => AudioSys.play(900, 'sine', 0.15), // Bip limpo e rápido
+        success: () => AudioSys.playTone(900, 'sine', 0.15),
         warning: () => { 
-          AudioSys.play(400, 'triangle', 0.15); 
-          setTimeout(() => AudioSys.play(400, 'triangle', 0.15), 180); 
+          AudioSys.playTone(400, 'triangle', 0.15); 
+          AudioSys.playTone(400, 'triangle', 0.15, 0.2); 
         },
-        // NOVO SOM DE ERRO: Dois tons graves simulando uma "campainha de erro"
-        error: () => { 
-          AudioSys.play(150, 'sawtooth', 0.2);
-          setTimeout(() => AudioSys.play(100, 'sawtooth', 0.4), 200); 
+        error: () => {
+          // Som grave e dissonante (Buzzer)
+          if (AudioSys.ctx.state === 'suspended') AudioSys.ctx.resume();
+          const osc = AudioSys.ctx.createOscillator();
+          const gain = AudioSys.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, AudioSys.ctx.currentTime);
+          osc.frequency.setValueAtTime(100, AudioSys.ctx.currentTime + 0.15);
+          osc.connect(gain);
+          gain.connect(AudioSys.ctx.destination);
+          osc.start();
+          gain.gain.setValueAtTime(1, AudioSys.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, AudioSys.ctx.currentTime + 0.35);
+          osc.stop(AudioSys.ctx.currentTime + 0.35);
         }
       };
 
@@ -256,13 +270,16 @@
             const nomeKey = keys.find(k => k.toLowerCase() === 'nome');
             
             if (idKey && nomeKey && row[idKey]) {
-              const id = String(row[idKey]).trim();
+              // Normaliza o ID removendo zeros à esquerda (000237 vira 237)
+              const id = String(row[idKey]).trim().replace(/^0+/, '') || '0';
               const nome = String(row[nomeKey]).trim();
               newEmployees[id] = nome;
             }
           });
 
-          if (Object.keys(newEmployees).length === 0) throw new Error("Não encontramos as colunas 'ID' e 'Nome'.");
+          if (Object.keys(newEmployees).length === 0) {
+            throw new Error("Não encontramos as colunas 'ID' e 'Nome' na planilha.");
+          }
 
           state.employees = newEmployees;
           localStorage.setItem("app_employees", JSON.stringify(state.employees));
@@ -270,9 +287,9 @@
           alert(`✅ Importação concluída! ${Object.keys(state.employees).length} funcionários carregados.`);
           updateDashboard();
         } catch (error) {
-          alert(`❌ Erro: ${error.message}`);
+          alert(`❌ Erro ao ler a planilha: ${error.message}`);
         } finally {
-          dom.fileInput.value = "";
+          dom.fileInput.value = ""; 
         }
       }
 
@@ -295,28 +312,23 @@
 
       function startKioskMode() {
         const camId = dom.camSelect.value;
-        if (!camId) {
-          alert("Por favor, selecione uma câmera.");
-          return;
-        }
+        if (!camId) return alert("Selecione uma câmera.");
 
+        // Espelhamento dinâmico
         const camLabel = dom.camSelect.options[dom.camSelect.selectedIndex].text.toLowerCase();
-        state.isFrontCamera = camLabel.includes("front") || camLabel.includes("frontal") || camLabel.includes("user");
-        
-        const reader = document.getElementById("reader-container");
-        if (state.isFrontCamera) {
-          reader.classList.add("mirror");
+        if (camLabel.includes('front') || camLabel.includes('frontal') || camLabel.includes('user')) {
+          document.getElementById('reader-container').classList.add('mirror-video');
         } else {
-          reader.classList.remove("mirror");
+          document.getElementById('reader-container').classList.remove('mirror-video');
         }
 
         document.body.classList.add("kiosk-active");
         state.html5QrCode = new Html5Qrcode("reader-container");
         
-        // Alta performance: FPS 15 e motor restrito à família QR CODE
+        // Alta Performance + Tela Cheia (sem qrbox)
         const scannerConfig = {
-          fps: 15, 
-          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+          fps: 15,
+          formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], 
           videoConstraints: {
             deviceId: { exact: camId },
             width: { ideal: 1280 },
@@ -331,79 +343,70 @@
           processScan, 
           () => {} 
         ).catch(err => {
-          alert("Falha ao iniciar o scanner: " + err);
+          alert("Falha ao iniciar: " + err);
           document.body.classList.remove("kiosk-active");
         });
       }
 
       function exitKioskMode() {
-        const pin = prompt("🔐 Área Restrita. Digite o PIN:");
-        if (pin !== CONFIG.ADMIN_PIN) {
-          if (pin !== null) alert("PIN Incorreto!");
-          return;
-        }
+        const pin = prompt("🔐 Digite o PIN da Portaria:");
+        if (pin !== CONFIG.ADMIN_PIN) return pin !== null && alert("PIN Incorreto!");
 
         if (state.html5QrCode) {
           state.html5QrCode.stop().then(() => {
             document.body.classList.remove("kiosk-active");
             updateDashboard();
-          }).catch(err => console.error("Erro ao parar", err));
+          }).catch(err => console.error(err));
         }
+      }
+
+      function triggerFlash(typeClass) {
+        dom.flashOverlay.className = typeClass;
+        setTimeout(() => { dom.flashOverlay.className = ""; }, 200);
+      }
+
+      function showCentralPopup(type, title, subtitle) {
+        dom.feedbackCard.className = `show ${type}`;
+        dom.feedbackTitle.textContent = title; 
+        dom.feedbackSubtitle.textContent = subtitle;
       }
 
       function processScan(decodedText) {
         if (state.isProcessing) return;
-        state.isProcessing = true; // Bloqueia múltiplas leituras indesejadas no mesmo segundo
+        state.isProcessing = true;
 
-        const idLido = String(decodedText).trim();
+        // Normaliza o QR Code (00237 vira 237)
+        const idLido = String(decodedText).trim().replace(/^0+/, '') || '0';
         const employeeName = state.employees[idLido];
-        
-        resetFeedbackUI();
 
         if (!employeeName) {
           AudioSys.error();
-          setFeedbackUI("error", "Não Encontrado", `[${idLido}] ausente da base.`);
+          triggerFlash("flash-error");
+          showCentralPopup("error", "Não Encontrado", `ID: ${idLido}`);
         } else {
           const hasCheckedIn = state.attendance.some(rec => rec.id === idLido);
           
           if (hasCheckedIn) {
             AudioSys.warning();
-            setFeedbackUI("warning", employeeName, "Presença já confirmada.");
+            triggerFlash("flash-warning");
+            showCentralPopup("warning", employeeName, "Presença já confirmada hoje.");
           } else {
             AudioSys.success();
+            triggerFlash("flash-success");
             const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             
             state.attendance.unshift({ id: idLido, nome: employeeName, hora: timeStr });
             localStorage.setItem("app_attendance", JSON.stringify(state.attendance));
             
-            setFeedbackUI("success", employeeName, `Confirmado: ${timeStr}`);
+            showCentralPopup("success", employeeName, timeStr);
           }
         }
 
-        // Libera a câmera absurdamente mais rápido para a fila fluir
+        // Ritmo Rápido: Libera para o próximo logo após sumir o popup
         setTimeout(() => {
-          resetFeedbackUI();
+          dom.feedbackCard.className = "";
           state.isProcessing = false;
         }, CONFIG.SCAN_COOLDOWN_MS);
-      }
-
-      function setFeedbackUI(type, title, subtitle) {
-        // Clarão sólido cobrindo tudo!
-        dom.flashOverlay.className = `flash-${type}`;
-        
-        // O clarão dura apenas 200ms para criar a sensação de "Flash de Luz"
-        setTimeout(() => { 
-          dom.flashOverlay.className = ""; 
-        }, 200);
-
-        // O Popup sobe na tela e fica pelo tempo de Cooldown configurado
-        dom.feedbackCard.className = `${type} show`;
-        dom.feedbackTitle.textContent = title;
-        dom.feedbackSubtitle.textContent = subtitle;
-      }
-
-      function resetFeedbackUI() {
-        dom.feedbackCard.className = "";
       }
 
       function updateDashboard() {
@@ -416,41 +419,31 @@
           const tdId = document.createElement("td"); tdId.textContent = row.id;
           const tdNome = document.createElement("td"); tdNome.textContent = row.nome;
           const tdHora = document.createElement("td"); tdHora.textContent = row.hora;
-          
           tr.appendChild(tdId); tr.appendChild(tdNome); tr.appendChild(tdHora);
           dom.tbody.appendChild(tr);
         });
       }
 
       function exportToExcel() {
-        if (state.attendance.length === 0) return alert("Não há presenças para exportar.");
-        
+        if (state.attendance.length === 0) return alert("Lista vazia.");
         const worksheet = XLSX.utils.json_to_sheet(state.attendance);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Presenças");
-        
         const dateStr = new Date().toISOString().slice(0, 10);
         XLSX.writeFile(workbook, `Relatorio_Presenca_${dateStr}.xlsx`);
       }
 
       function shareToWhatsApp() {
         if (state.attendance.length === 0) return alert("Lista vazia.");
-        
         const dateStr = new Date().toLocaleDateString('pt-BR');
-        let text = `*Lista de Presença - ${dateStr}*\n`;
-        text += `*Total Presentes:* ${state.attendance.length}\n\n`;
-        
-        state.attendance.forEach(rec => {
-          text += `✅ ${rec.nome} - ${rec.hora}\n`;
-        });
-
-        const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
+        let text = `*Lista de Presença - ${dateStr}*\n*Total Presentes:* ${state.attendance.length}\n\n`;
+        state.attendance.forEach(rec => text += `✅ ${rec.nome} - ${rec.hora}\n`);
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
       }
 
       function clearAttendance() {
         if (state.attendance.length === 0) return;
-        if (confirm("⚠️ Tem certeza que deseja limpar a lista de presença de hoje?")) {
+        if (confirm("⚠️ Tem certeza que deseja limpar a lista de hoje? Exporte antes!")) {
           state.attendance = [];
           localStorage.removeItem("app_attendance");
           updateDashboard();
