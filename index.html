@@ -61,14 +61,15 @@
     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
     th { background: #f8fafc; font-weight: 600; color: var(--color-primary); position: sticky; top: 0; }
 
-    #scanner-view { display: none; position: relative; width: 100%; max-width: 600px; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
-    body.kiosk-active { padding: 0; background: #000; overflow: hidden; }
-    body.kiosk-active .app-container { max-width: 100%; height: 100%; justify-content: center; }
+    /* MODO KIOSK (TELA CHEIA) - Adaptado para Tablets */
+    #scanner-view { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: 50; flex-direction: column; justify-content: center; align-items: center; background: #000; }
+    body.kiosk-active { padding: 0; margin: 0; background: #000; overflow: hidden; }
     body.kiosk-active #admin-view { display: none; }
     body.kiosk-active #scanner-view { display: flex; }
     
-    #reader-container { width: 100%; height: 100%; background: #000; }
-    #reader-container video { object-fit: cover !important; }
+    #reader-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; }
+    /* Força o vídeo a cobrir 100% da tela sem faixas pretas */
+    #reader-container video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
     
     /* Efeito de Espelho Inteligente */
     .mirror-video video { transform: scaleX(-1) !important; }
@@ -88,8 +89,6 @@
     #flash-overlay.flash-success { background: rgba(22, 163, 74, 0.7); opacity: 1; }
     #flash-overlay.flash-warning { background: rgba(217, 119, 6, 0.7); opacity: 1; }
     #flash-overlay.flash-error { background: rgba(220, 38, 38, 0.7); opacity: 1; }
-
-    #btn-exit-scanner { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: auto; background: rgba(255,255,255,0.9); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); color: #000; border: none; }
   </style>
 </head>
 <body>
@@ -154,10 +153,6 @@
         <div id="feedback-title"></div>
         <div id="feedback-subtitle"></div>
       </div>
-
-      <button id="btn-exit-scanner" class="btn-outline">
-        🔒 Encerrar Scanner
-      </button>
     </section>
 
   </main>
@@ -184,7 +179,6 @@
         empCount: document.getElementById('employee-count-label'),
         camSelect: document.getElementById('camera-select'),
         btnStart: document.getElementById('btn-start-scanner'),
-        btnExit: document.getElementById('btn-exit-scanner'),
         btnExcel: document.getElementById('btn-export-excel'),
         btnWa: document.getElementById('btn-export-wa'),
         btnClear: document.getElementById('btn-clear-data'),
@@ -241,13 +235,29 @@
         loadCameras();
       }
 
+      let tapCount = 0;
+      let tapTimeout = null;
+
       function bindEvents() {
         dom.fileInput.addEventListener('change', handleExcelUpload);
         dom.btnStart.addEventListener('click', startKioskMode);
-        dom.btnExit.addEventListener('click', exitKioskMode);
         dom.btnExcel.addEventListener('click', exportToExcel);
         dom.btnWa.addEventListener('click', shareToWhatsApp);
         dom.btnClear.addEventListener('click', clearAttendance);
+
+        // Sequência de toques ocultos para sair (5 toques rápidos em qualquer lugar da tela)
+        document.getElementById('scanner-view').addEventListener('click', () => {
+          tapCount++;
+          clearTimeout(tapTimeout);
+          
+          if (tapCount >= 5) {
+            tapCount = 0;
+            exitKioskMode();
+          } else {
+            // Zera a contagem se demorar mais de 1 segundo entre os toques
+            tapTimeout = setTimeout(() => { tapCount = 0; }, 1000); 
+          }
+        });
       }
 
       async function handleExcelUpload(e) {
